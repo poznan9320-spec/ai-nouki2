@@ -28,6 +28,15 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(deliveries)
 }
 
+export async function DELETE(req: NextRequest) {
+  const user = getTokenFromRequest(req)
+  if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+  if (user.role !== 'ADMIN') return NextResponse.json({ error: '権限がありません' }, { status: 403 })
+
+  const { count } = await prisma.delivery.deleteMany({ where: { companyId: user.companyId } })
+  return NextResponse.json({ deleted: count })
+}
+
 export async function POST(req: NextRequest) {
   const user = getTokenFromRequest(req)
   if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })

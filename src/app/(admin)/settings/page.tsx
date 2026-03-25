@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
-import { Building2, Users, Shield, Copy } from 'lucide-react'
+import { Building2, Users, Shield, Copy, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface CompanyInfo {
@@ -37,6 +37,7 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<UserInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingRole, setUpdatingRole] = useState<string | null>(null)
+  const [deletingAll, setDeletingAll] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -85,6 +86,24 @@ export default function SettingsPage() {
   const getInitials = (name: string | null, email: string) => {
     if (name) return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     return email[0].toUpperCase()
+  }
+
+  const handleDeleteAll = async () => {
+    if (!confirm('すべての納期データを削除します。この操作は取り消せません。よろしいですか？')) return
+    setDeletingAll(true)
+    try {
+      const res = await fetch('/api/mobile/deliveries', {
+        method: 'DELETE',
+        headers: authHeaders(),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || '削除に失敗しました')
+      toast.success(`${data.deleted}件のデータを削除しました`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '削除に失敗しました')
+    } finally {
+      setDeletingAll(false)
+    }
   }
 
   const getRoleLabel = (role: string) => role === 'ADMIN' ? '管理者' : '従業員'
@@ -158,6 +177,35 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Danger zone (admin only) */}
+      {isAdmin && (
+        <Card className="border-red-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-700">
+              <Trash2 className="h-5 w-5" />
+              データ管理
+            </CardTitle>
+            <CardDescription>取込んだ納期データの一括削除</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+              <div>
+                <p className="font-medium text-red-800 text-sm">全データを削除</p>
+                <p className="text-xs text-red-600 mt-0.5">すべての納期データを削除します（取り消し不可）</p>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteAll}
+                disabled={deletingAll}
+              >
+                {deletingAll ? '削除中...' : '全削除'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Users management (admin only) */}
       {isAdmin && (
