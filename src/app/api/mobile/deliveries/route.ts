@@ -8,25 +8,24 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status')
-  const page = parseInt(searchParams.get('page') || '1')
-  const limit = parseInt(searchParams.get('limit') || '20')
+  const from = searchParams.get('from')
+  const to = searchParams.get('to')
 
-  const where = {
-    companyId: user.companyId,
-    ...(status ? { status: status as any } : {}),
+  const where: Record<string, unknown> = { companyId: user.companyId }
+  if (status) where.status = status
+  if (from || to) {
+    where.deliveryDate = {
+      ...(from ? { gte: new Date(from) } : {}),
+      ...(to ? { lte: new Date(to) } : {}),
+    }
   }
 
-  const [deliveries, total] = await Promise.all([
-    prisma.delivery.findMany({
-      where,
-      orderBy: { deliveryDate: 'asc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.delivery.count({ where }),
-  ])
+  const deliveries = await prisma.delivery.findMany({
+    where,
+    orderBy: { deliveryDate: 'asc' },
+  })
 
-  return NextResponse.json({ deliveries, total, page, limit })
+  return NextResponse.json(deliveries)
 }
 
 export async function POST(req: NextRequest) {
@@ -35,7 +34,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { productName, quantity, deliveryDate, notes } = body
+    const { productName, quantity, deliveryDate, status, sourceType, notes } = body
 
     if (!productName || !quantity || !deliveryDate) {
       return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
@@ -46,14 +45,14 @@ export async function POST(req: NextRequest) {
         productName,
         quantity: parseInt(quantity),
         deliveryDate: new Date(deliveryDate),
-        status: 'PENDING',
-        sourceType: 'MANUAL',
-        notes,
+        status: status ?? 'PENDING',
+        sourceType: sourceType ?? 'MANUAL',
+        notes: notes ?? null,
         companyId: user.companyId,
       },
     })
 
-    return NextResponse.json({ delivery }, { status: 201 })
+    return NextResponse.json(delivery, { status: 201 })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })

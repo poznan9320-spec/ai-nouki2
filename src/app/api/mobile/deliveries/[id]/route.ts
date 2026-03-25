@@ -6,17 +6,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const user = getTokenFromRequest(req)
   if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
   const { id } = await params
-  const body = await req.json()
-  const delivery = await prisma.delivery.update({
-    where: { id, companyId: user.companyId },
-    data: {
-      productName: body.productName || body.product_name,
-      quantity: parseInt(body.quantity),
-      deliveryDate: new Date(body.deliveryDate || body.delivery_date),
-      notes: body.notes || null,
-    }
-  })
-  return NextResponse.json({ delivery })
+  try {
+    const body = await req.json()
+    const updateData: Record<string, unknown> = {}
+    if (body.productName !== undefined) updateData.productName = body.productName
+    if (body.quantity !== undefined) updateData.quantity = parseInt(body.quantity)
+    if (body.deliveryDate !== undefined) updateData.deliveryDate = new Date(body.deliveryDate)
+    if (body.status !== undefined) updateData.status = body.status
+    if (body.notes !== undefined) updateData.notes = body.notes ?? null
+
+    const delivery = await prisma.delivery.update({
+      where: { id, companyId: user.companyId },
+      data: updateData,
+    })
+    return NextResponse.json(delivery)
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: '更新に失敗しました' }, { status: 500 })
+  }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
