@@ -41,7 +41,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ファイルまたはテキストが必要です' }, { status: 400 })
     }
 
-    let extractedData: { items: Array<{ productName: string; quantity: number; deliveryDate: string; notes?: string }> }
+    const supplierName = (formData.get('supplierName') as string | null)?.trim() || null
+
+    type ExtractedItem = { productName: string; quantity: number; deliveryDate: string; notes?: string }
+    type ExtractedData = { items: ExtractedItem[] }
+
+    function parseJson(raw: string): ExtractedData {
+      // マークダウンコードブロックを除去してからパース
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+      const match = cleaned.match(/\{[\s\S]*\}/)
+      if (!match) throw new Error('JSONが見つかりません')
+      return JSON.parse(match[0]) as ExtractedData
+    }
+
+    let extractedData: ExtractedData
 
     if (file) {
       const bytes = await file.arrayBuffer()
@@ -52,20 +65,18 @@ export async function POST(req: NextRequest) {
         model: 'claude-opus-4-6',
         max_tokens: 1024,
         system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-              { type: 'text', text: 'この画像から納期・配送情報を抽出してください。' },
-            ],
-          },
-        ],
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: 'この画像から納期・配送情報を抽出してください。' },
+          ],
+        }],
       })
 
       const content = response.content[0]
       if (content.type !== 'text') throw new Error('予期しないレスポンス形式')
-      extractedData = JSON.parse(content.text)
+      extractedData = parseJson(content.text)
     } else {
       const response = await client.messages.create({
         model: 'claude-opus-4-6',
@@ -76,7 +87,7 @@ export async function POST(req: NextRequest) {
 
       const content = response.content[0]
       if (content.type !== 'text') throw new Error('予期しないレスポンス形式')
-      extractedData = JSON.parse(content.text)
+      extractedData = parseJson(content.text)
     }
 
     if (!extractedData.items?.length) {
@@ -91,6 +102,7 @@ export async function POST(req: NextRequest) {
         status: 'PENDING' as const,
         sourceType: file ? 'IMAGE' as const : 'TEXT' as const,
         notes: item.notes || null,
+        supplierName,
         companyId: user.companyId,
       })),
     })

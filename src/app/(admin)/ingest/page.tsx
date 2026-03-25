@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { authHeaders } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { Upload, FileText, ImageIcon, Check, AlertTriangle, Info } from 'lucide-react'
+import { Upload, FileText, ImageIcon, Check, AlertTriangle, Info, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface ImportedItem {
@@ -39,6 +39,17 @@ export default function IngestPage() {
   const [csvResult, setCsvResult] = useState<CsvResult | null>(null)
   const [csvError, setCsvError] = useState<string | null>(null)
 
+  // 取引先
+  const [supplierName, setSupplierName] = useState('')
+  const [suppliers, setSuppliers] = useState<string[]>([])
+
+  useEffect(() => {
+    fetch('/api/mobile/suppliers', { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: { name: string }[]) => setSuppliers(data.map(s => s.name)))
+      .catch(() => {})
+  }, [])
+
   const handleOcrSubmit = async () => {
     if (!ocrFile && !ocrText.trim()) {
       toast.error('画像またはテキストを入力してください')
@@ -50,6 +61,7 @@ export default function IngestPage() {
       const formData = new FormData()
       if (ocrFile) formData.append('file', ocrFile)
       if (ocrText.trim()) formData.append('text', ocrText.trim())
+      if (supplierName.trim()) formData.append('supplierName', supplierName.trim())
 
       const h = { ...authHeaders() }
       delete h['Content-Type']
@@ -76,6 +88,7 @@ export default function IngestPage() {
     try {
       const formData = new FormData()
       formData.append('file', csvFile)
+      if (supplierName.trim()) formData.append('supplierName', supplierName.trim())
 
       const h = { ...authHeaders() }
       delete h['Content-Type']
@@ -143,6 +156,26 @@ export default function IngestPage() {
                 <p className="font-mono text-xs">日本語例: 商品名, 数量, 納期</p>
                 <p className="font-mono text-xs">その他: 品名, 品目名, 品番 / 発注数, 個数 / 回答納期, 納入日</p>
                 <p className="text-xs mt-1">対応エンコード: UTF-8, Shift-JIS（Excel CSV）｜ 対応日付: YYYY-MM-DD, YYYY/MM/DD, YYYY年MM月DD日</p>
+              </div>
+
+              {/* 取引先 */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <Building2 className="h-3.5 w-3.5" />
+                  取引先（任意）
+                </Label>
+                <Input
+                  list="supplier-list"
+                  placeholder="取引先名を入力または選択"
+                  value={supplierName}
+                  onChange={e => setSupplierName(e.target.value)}
+                />
+                <datalist id="supplier-list">
+                  {suppliers.map(s => <option key={s} value={s} />)}
+                </datalist>
+                {suppliers.length > 0 && (
+                  <p className="text-xs text-[#64748B]">登録済み取引先から選択、または直接入力できます</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -254,6 +287,23 @@ export default function IngestPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* 取引先（OCRタブ） */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <Building2 className="h-3.5 w-3.5" />
+                  取引先（任意）
+                </Label>
+                <Input
+                  list="supplier-list-ocr"
+                  placeholder="取引先名を入力または選択"
+                  value={supplierName}
+                  onChange={e => setSupplierName(e.target.value)}
+                />
+                <datalist id="supplier-list-ocr">
+                  {suppliers.map(s => <option key={s} value={s} />)}
+                </datalist>
+              </div>
+
               <div className="space-y-2">
                 <Label>画像ファイル（任意）</Label>
                 <div

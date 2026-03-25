@@ -150,6 +150,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData()
     const file = formData.get('file') as File | null
     if (!file) return NextResponse.json({ error: 'CSVファイルが必要です' }, { status: 400 })
+    const supplierName = (formData.get('supplierName') as string | null)?.trim() || null
 
     // エンコード自動判定（UTF-8 / Shift-JIS）
     const buffer = await file.arrayBuffer()
@@ -188,7 +189,8 @@ export async function POST(req: NextRequest) {
     // 全行を変換
     const toSave: {
       productName: string; quantity: number; deliveryDate: Date
-      status: 'PENDING'; sourceType: 'CSV'; notes: string | null; companyId: string
+      status: 'PENDING'; sourceType: 'CSV'; notes: string | null
+      supplierName: string | null; companyId: string
     }[] = []
     const errors: { row: number; error: string }[] = []
     const preview: { productName: string; quantity: number; deliveryDate: string }[] = []
@@ -227,7 +229,7 @@ export async function POST(req: NextRequest) {
         toSave.push({
           productName, quantity, deliveryDate,
           status: 'PENDING', sourceType: 'CSV',
-          notes, companyId: user.companyId,
+          notes, supplierName, companyId: user.companyId,
         })
         if (preview.length < 5) preview.push({ productName, quantity, deliveryDate: dateRaw })
       } catch {

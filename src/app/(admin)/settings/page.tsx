@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
-import { Building2, Users, Shield, Copy, Trash2 } from 'lucide-react'
+import { Building2, Users, Shield, Copy, Trash2, Plus, Truck } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface CompanyInfo {
@@ -39,14 +39,23 @@ export default function SettingsPage() {
   const [updatingRole, setUpdatingRole] = useState<string | null>(null)
   const [deletingAll, setDeletingAll] = useState(false)
 
+  // 取引先管理
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([])
+  const [newSupplier, setNewSupplier] = useState('')
+  const [addingSupplier, setAddingSupplier] = useState(false)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const companyData = await apiFetch<CompanyInfo>('/api/mobile/company', { headers: authHeaders() })
       setCompany(companyData)
       if (isAdmin) {
-        const usersData = await apiFetch<UserInfo[]>('/api/mobile/users', { headers: authHeaders() })
+        const [usersData, suppliersData] = await Promise.all([
+          apiFetch<UserInfo[]>('/api/mobile/users', { headers: authHeaders() }),
+          apiFetch<{ id: string; name: string }[]>('/api/mobile/suppliers', { headers: authHeaders() }),
+        ])
         setUsers(usersData)
+        setSuppliers(suppliersData)
       }
     } catch {
       toast.error('データの取得に失敗しました')
@@ -86,6 +95,35 @@ export default function SettingsPage() {
   const getInitials = (name: string | null, email: string) => {
     if (name) return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     return email[0].toUpperCase()
+  }
+
+  const handleAddSupplier = async () => {
+    if (!newSupplier.trim()) return
+    setAddingSupplier(true)
+    try {
+      const s = await apiFetch<{ id: string; name: string }>('/api/mobile/suppliers', {
+        method: 'POST',
+        body: { name: newSupplier.trim() },
+        headers: authHeaders(),
+      })
+      setSuppliers(prev => [...prev, s].sort((a, b) => a.name.localeCompare(b.name, 'ja')))
+      setNewSupplier('')
+      toast.success('取引先を追加しました')
+    } catch {
+      toast.error('追加に失敗しました')
+    } finally {
+      setAddingSupplier(false)
+    }
+  }
+
+  const handleDeleteSupplier = async (id: string) => {
+    try {
+      await apiFetch(`/api/mobile/suppliers/${id}`, { method: 'DELETE', headers: authHeaders() })
+      setSuppliers(prev => prev.filter(s => s.id !== id))
+      toast.success('取引先を削除しました')
+    } catch {
+      toast.error('削除に失敗しました')
+    }
   }
 
   const handleDeleteAll = async () => {
@@ -177,6 +215,59 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Supplier management (admin only) */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5" />
+              取引先管理
+            </CardTitle>
+            <CardDescription>データ取込時に選択できる取引先を管理します</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* 追加フォーム */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="取引先名を入力"
+                value={newSupplier}
+                onChange={e => setNewSupplier(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddSupplier()}
+                className="flex-1"
+              />
+              <Button
+                onClick={handleAddSupplier}
+                disabled={addingSupplier || !newSupplier.trim()}
+                className="bg-[#102A43] hover:bg-[#1a3a5c] shrink-0"
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-1" />追加
+              </Button>
+            </div>
+            {/* 一覧 */}
+            {suppliers.length === 0 ? (
+              <p className="text-sm text-[#64748B] text-center py-3">取引先が登録されていません</p>
+            ) : (
+              <div className="space-y-1">
+                {suppliers.map(s => (
+                  <div key={s.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
+                    <span className="text-sm text-[#102A43]">{s.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                      onClick={() => handleDeleteSupplier(s.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Danger zone (admin only) */}
       {isAdmin && (
