@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       const mediaType = (file.type || 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
 
       const response = await client.messages.create({
-        model: 'claude-opus-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system: SYSTEM_PROMPT,
         messages: [{
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       extractedData = parseJson(content.text)
     } else {
       const response = await client.messages.create({
-        model: 'claude-opus-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: text! }],
