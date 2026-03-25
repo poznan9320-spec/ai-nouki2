@@ -226,6 +226,14 @@ export async function POST(req: NextRequest) {
           continue
         }
 
+        // 3ヶ月より古いデータはスキップ
+        const threeMonthsAgo = new Date()
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+        if (deliveryDate < threeMonthsAgo) {
+          errors.push({ row: i + 2, error: `3ヶ月以上前のためスキップ: ${productName} (${dateRaw})` })
+          continue
+        }
+
         toSave.push({
           productName, quantity, deliveryDate,
           status: 'PENDING', sourceType: 'CSV',
