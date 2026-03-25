@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Company {
+  id        String     @id @default(cuid())
+  name      String
+  createdAt DateTime   @default(now())
+  users     User[]
+  deliveries Delivery[]
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  password     String?
+  name         String?
+  role         Role           @default(EMPLOYEE)
+  companyId    String
+  createdAt    DateTime       @default(now())
+  company      Company        @relation(fields: [companyId], references: [id])
+  messages     Message[]
+  orderRequests OrderRequest[]
+  notifications Notification[]
+}
+
+model Delivery {
+  id           String         @id @default(cuid())
+  productName  String
+  quantity     Int
+  deliveryDate DateTime
+  status       DeliveryStatus @default(PENDING)
+  sourceType   SourceType
+  sourceUrl    String?
+  companyId    String
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  company      Company        @relation(fields: [companyId], references: [id])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  senderId  String
+  chatRoom  String
+  fileName  String?
+  fileUrl   String?
+  createdAt DateTime @default(now())
+  sender    User     @relation(fields: [senderId], references: [id])
+}
+
+model OrderRequest {
+  id           String        @id @default(cuid())
+  productName  String
+  quantity     Int?
+  neededBy     DateTime?
+  details      String?
+  requesterId  String
+  status       OrderStatus   @default(PENDING)
+  adminComment String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  requester    User          @relation(fields: [requesterId], references: [id])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id])
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum DeliveryStatus {
+  PENDING
+  SHIPPED
+  DELIVERED
+  DELAYED
+  CANCELLED
+}
+
+enum SourceType {
+  FAX
+  CSV
+  IMAGE
+  TEXT
+  MANUAL
+}
+
+enum OrderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum NotificationType {
+  CHAT
+  ORDER_STATUS
+  DELIVERY_UPDATE
+}
