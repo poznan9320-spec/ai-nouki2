@@ -6,91 +6,122 @@ import { getTokenFromRequest } from '@/lib/auth'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// UTF-8 BOM を除去
-function stripBOM(text: string): string {
-  return text.replace(/^\uFEFF/, '')
+// ========== エンコード検出 ==========
+function countJapanese(text: string): number {
+  return (text.match(/[\u3040-\u30FF\u4E00-\u9FAF\uFF00-\uFFEF]/g) ?? []).length
 }
 
-// 複数の日付フォーマットに対応
+function decodeBuffer(buffer: ArrayBuffer): string {
+  const uint8 = new Uint8Array(buffer)
+
+  // UTF-8 BOM チェック
+  if (uint8[0] === 0xEF && uint8[1] === 0xBB && uint8[2] === 0xBF) {
+    return new TextDecoder('utf-8').decode(buffer).replace(/^\uFEFF/, '')
+  }
+
+  // UTF-8 と Shift-JIS 両方でデコードして、日本語文字が多い方を採用
+  const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(buffer).replace(/^\uFEFF/, '')
+  let sjis = ''
+  try {
+    sjis = new TextDecoder('shift-jis', { fatal: false }).decode(buffer)
+  } catch {
+    sjis = ''
+  }
+
+  const utf8JP = countJapanese(utf8)
+  const sjisJP = countJapanese(sjis)
+
+  // Shift-JIS の日本語文字数が多ければ Shift-JIS を採用
+  return sjisJP > utf8JP ? sjis : utf8
+}
+
+// ========== 日付解析 ==========
+const SKIP_DATE_VALUES = ['未定', 'みてい', '-', '—', 'TBD', 'tbd', '']
+
 function parseDate(str: string): Date | null {
   if (!str) return null
-  const s = str.trim().replace(/　/g, '') // 全角スペース除去
+  const s = str.trim().replace(/[\s　]/g, '')  // 全角スペース除去
 
-  // YYYY-MM-DD / YYYY/MM/DD
+  if (SKIP_DATE_VALUES.includes(s)) return null
+
+  // YYYY/MM/DD または YYYY-MM-DD
   let d = new Date(s.replace(/\//g, '-'))
   if (!isNaN(d.getTime())) return d
 
   // YYYY年MM月DD日
-  const jp = s.match(/(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日?/)
+  const jp = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日?/)
   if (jp) {
     d = new Date(`${jp[1]}-${jp[2].padStart(2, '0')}-${jp[3].padStart(2, '0')}`)
     if (!isNaN(d.getTime())) return d
   }
 
-  // 令和/平成 (和暦)
-  const wareki = s.match(/[令R](\d+)[年.]\s*(\d{1,2})[月.]\s*(\d{1,2})/)
+  // 令和/R + 年号
+  const wareki = s.match(/[令R](\d+)[年.](\d{1,2})[月.](\d{1,2})/)
   if (wareki) {
     const year = 2018 + parseInt(wareki[1])
     d = new Date(`${year}-${wareki[2].padStart(2, '0')}-${wareki[3].padStart(2, '0')}`)
     if (!isNaN(d.getTime())) return d
   }
 
-  // MM/DD/YYYY (US format)
-  const us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (us) {
-    d = new Date(`${us[3]}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`)
-    if (!isNaN(d.getTime())) return d
-  }
-
   return null
 }
 
-// カラム名の候補リスト (フォールバック用)
-const NAME_COLS = ['商品名', '品名', '品目名', '品目', '製品名', 'productName', 'product_name', '商品', '品番']
-const QTY_COLS = ['数量', '個数', '発注数', '注文数', '数', 'quantity', 'qty', '受注数']
-const DATE_COLS = ['納期', '回答納期', '納入日', '納品日', '希望納期', 'deliveryDate', 'delivery_date', '納入予定日']
-const NOTES_COLS = ['備考', 'メモ', '摘要', 'notes', '注記']
+// ========== カラム自動判定 ==========
+const NAME_ALIASES = ['商品名', '品名', '品目名', '製品名', '商品', 'productName', 'product_name', 'item_name', 'name']
+const QTY_ALIASES  = ['数量', '量', '個数', '発注数', '注文数', '受注数', 'quantity', 'qty', 'count', 'Ê']
+const DATE_ALIASES = ['納入日', '納品日', '納期', '回答納期', '希望納期', '納入予定日', 'deliveryDate', 'delivery_date', 'date']
+const NOTE_ALIASES = ['備考', 'メモ', '摘要', '備考欄', 'notes', 'memo', 'remark', 'Kp']
 
 interface Mapping {
   productName: string | null
-  quantity: string | null
+  quantity:    string | null
   deliveryDate: string | null
-  notes: string | null
+  notes:       string | null
+}
+
+function pickCol(headers: string[], aliases: string[]): string | null {
+  // 完全一致
+  for (const h of headers) {
+    if (aliases.includes(h)) return h
+  }
+  // 部分一致
+  for (const h of headers) {
+    if (aliases.some(a => h.includes(a) || a.includes(h))) return h
+  }
+  return null
 }
 
 async function detectMapping(headers: string[], sampleRows: Record<string, string>[]): Promise<Mapping> {
-  // まず候補リストで試みる
   const fallback: Mapping = {
-    productName: headers.find(h => NAME_COLS.some(c => h.includes(c))) ?? null,
-    quantity: headers.find(h => QTY_COLS.some(c => h.includes(c))) ?? null,
-    deliveryDate: headers.find(h => DATE_COLS.some(c => h.includes(c))) ?? null,
-    notes: headers.find(h => NOTES_COLS.some(c => h.includes(c))) ?? null,
+    productName:  pickCol(headers, NAME_ALIASES),
+    quantity:     pickCol(headers, QTY_ALIASES),
+    deliveryDate: pickCol(headers, DATE_ALIASES),
+    notes:        pickCol(headers, NOTE_ALIASES),
   }
 
-  // 3つ全て見つかればAI不要
+  // 3項目揃っていればAI不要
   if (fallback.productName && fallback.quantity && fallback.deliveryDate) return fallback
 
-  // AIで判定
+  // AI判定（APIキーがある場合のみ）
   if (!process.env.ANTHROPIC_API_KEY) return fallback
-
-  const sample = sampleRows.slice(0, 3).map(r =>
-    headers.map(h => `${h}: ${r[h] ?? ''}`).join(' | ')
-  ).join('\n')
-
   try {
+    const sample = sampleRows.slice(0, 3)
+      .map(r => headers.map(h => `${h}: ${r[h] ?? ''}`).join(' | ')).join('\n')
+
     const res = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 200,
       messages: [{
         role: 'user',
-        content: `以下のCSVヘッダーとサンプルから、商品名・数量・納期・備考に対応するカラム名を特定してください。
+        content: `以下のCSVのヘッダーとサンプルデータを見て、商品名・数量・納期・備考に対応するカラム名をJSONで返してください。
+カラムが見つからない場合はnullにしてください。
 
 ヘッダー: ${headers.join(', ')}
 サンプル:
 ${sample}
 
-JSON形式のみで回答（null可）:
-{"productName":"カラム名","quantity":"カラム名","deliveryDate":"カラム名","notes":"カラム名またはnull"}`
+JSON形式のみ（余計な説明不要）:
+{"productName":"カラム名またはnull","quantity":"カラム名またはnull","deliveryDate":"カラム名またはnull","notes":"カラム名またはnull"}`
       }]
     })
     const text = res.content[0].type === 'text' ? res.content[0].text : ''
@@ -98,19 +129,19 @@ JSON形式のみで回答（null可）:
     if (match) {
       const parsed = JSON.parse(match[0]) as Mapping
       return {
-        productName: parsed.productName && headers.includes(parsed.productName) ? parsed.productName : fallback.productName,
-        quantity: parsed.quantity && headers.includes(parsed.quantity) ? parsed.quantity : fallback.quantity,
-        deliveryDate: parsed.deliveryDate && headers.includes(parsed.deliveryDate) ? parsed.deliveryDate : fallback.deliveryDate,
-        notes: parsed.notes && headers.includes(parsed.notes) ? parsed.notes : fallback.notes,
+        productName:  (parsed.productName  && headers.includes(parsed.productName))  ? parsed.productName  : fallback.productName,
+        quantity:     (parsed.quantity     && headers.includes(parsed.quantity))     ? parsed.quantity     : fallback.quantity,
+        deliveryDate: (parsed.deliveryDate && headers.includes(parsed.deliveryDate)) ? parsed.deliveryDate : fallback.deliveryDate,
+        notes:        (parsed.notes        && headers.includes(parsed.notes))        ? parsed.notes        : fallback.notes,
       }
     }
   } catch (e) {
-    console.error('AI mapping failed:', e)
+    console.error('AI mapping error:', e)
   }
-
   return fallback
 }
 
+// ========== メインハンドラ ==========
 export async function POST(req: NextRequest) {
   const user = getTokenFromRequest(req)
   if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
@@ -118,21 +149,11 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const file = formData.get('file') as File | null
-
     if (!file) return NextResponse.json({ error: 'CSVファイルが必要です' }, { status: 400 })
 
-    // ファイル読み込み（UTF-8 + BOM対応、Shift-JIS フォールバック）
+    // エンコード自動判定（UTF-8 / Shift-JIS）
     const buffer = await file.arrayBuffer()
-    let text: string
-    try {
-      text = stripBOM(new TextDecoder('utf-8').decode(buffer))
-      // 文字化けチェック（多くの ? や □ が含まれていればShift-JIS）
-      if ((text.match(/[?□]/g) ?? []).length > text.length * 0.1) {
-        text = stripBOM(new TextDecoder('shift-jis').decode(buffer))
-      }
-    } catch {
-      text = stripBOM(new TextDecoder('utf-8').decode(buffer))
-    }
+    const text = decodeBuffer(buffer)
 
     // CSVパース
     let records: Record<string, string>[]
@@ -144,8 +165,8 @@ export async function POST(req: NextRequest) {
         relax_column_count: true,
         bom: true,
       }) as Record<string, string>[]
-    } catch (parseErr) {
-      return NextResponse.json({ error: `CSVの解析に失敗しました: ${String(parseErr)}` }, { status: 400 })
+    } catch (e) {
+      return NextResponse.json({ error: `CSVの解析に失敗しました: ${String(e)}` }, { status: 400 })
     }
 
     if (records.length === 0) {
@@ -153,48 +174,62 @@ export async function POST(req: NextRequest) {
     }
 
     const headers = Object.keys(records[0])
-    const mapping = await detectMapping(headers, records.slice(0, 3))
+    const mapping = await detectMapping(headers, records.slice(0, 5))
 
     if (!mapping.productName || !mapping.quantity || !mapping.deliveryDate) {
       return NextResponse.json({
-        error: 'カラムの自動判定に失敗しました。CSVのヘッダー行を確認してください。',
+        error: 'カラムの自動判定に失敗しました',
         detectedHeaders: headers,
-        hint: `期待するヘッダー例: 商品名 or productName, 数量 or quantity, 納期 or deliveryDate`,
+        detectedMapping: mapping,
+        hint: '商品名・数量・納期に相当するカラム名がヘッダー行に含まれているか確認してください',
       }, { status: 400 })
     }
 
     // 全行を変換
-    const toSave = []
+    const toSave: {
+      productName: string; quantity: number; deliveryDate: Date
+      status: 'PENDING'; sourceType: 'CSV'; notes: string | null; companyId: string
+    }[] = []
     const errors: { row: number; error: string }[] = []
     const preview: { productName: string; quantity: number; deliveryDate: string }[] = []
 
     for (let i = 0; i < records.length; i++) {
       const row = records[i]
       try {
-        const productName = (row[mapping.productName!] ?? '').trim()
-        const quantityRaw = (row[mapping.quantity!] ?? '').trim().replace(/[,，,]/g, '')
-        const deliveryDateRaw = (row[mapping.deliveryDate!] ?? '').trim()
-        const notes = mapping.notes ? (row[mapping.notes] ?? '').trim() || null : null
+        const productName  = (row[mapping.productName!] ?? '').trim()
+        const quantityRaw  = (row[mapping.quantity!] ?? '').trim().replace(/[,，,]/g, '')
+        const dateRaw      = (row[mapping.deliveryDate!] ?? '').trim()
+        const notes        = mapping.notes ? (row[mapping.notes] ?? '').trim() || null : null
 
-        if (!productName || !quantityRaw || !deliveryDateRaw) {
-          errors.push({ row: i + 2, error: `空白データをスキップ: ${productName || '商品名なし'}` })
+        // 未定・空欄の納期はスキップ
+        if (SKIP_DATE_VALUES.includes(dateRaw)) {
+          errors.push({ row: i + 2, error: `納期未定のためスキップ: ${productName || '(商品名なし)'}` })
+          continue
+        }
+
+        if (!productName) {
+          errors.push({ row: i + 2, error: '商品名が空欄のためスキップ' })
           continue
         }
 
         const quantity = parseInt(quantityRaw)
         if (isNaN(quantity) || quantity <= 0) {
-          errors.push({ row: i + 2, error: `数量が不正: "${quantityRaw}"` })
+          errors.push({ row: i + 2, error: `数量が不正: "${quantityRaw}" (${productName})` })
           continue
         }
 
-        const deliveryDate = parseDate(deliveryDateRaw)
+        const deliveryDate = parseDate(dateRaw)
         if (!deliveryDate) {
-          errors.push({ row: i + 2, error: `日付形式が不正: "${deliveryDateRaw}"` })
+          errors.push({ row: i + 2, error: `日付形式が不正: "${dateRaw}" (${productName})` })
           continue
         }
 
-        toSave.push({ productName, quantity, deliveryDate, status: 'PENDING' as const, sourceType: 'CSV' as const, notes, companyId: user.companyId })
-        if (preview.length < 5) preview.push({ productName, quantity, deliveryDate: deliveryDateRaw })
+        toSave.push({
+          productName, quantity, deliveryDate,
+          status: 'PENDING', sourceType: 'CSV',
+          notes, companyId: user.companyId,
+        })
+        if (preview.length < 5) preview.push({ productName, quantity, deliveryDate: dateRaw })
       } catch {
         errors.push({ row: i + 2, error: '解析エラー' })
       }
@@ -202,20 +237,20 @@ export async function POST(req: NextRequest) {
 
     if (toSave.length === 0) {
       return NextResponse.json({
-        error: '有効なデータが見つかりませんでした',
+        error: '有効なデータが見つかりませんでした（全行スキップ）',
         detectedMapping: mapping,
-        errors,
+        errors: errors.slice(0, 20),
       }, { status: 400 })
     }
 
-    // 100件ずつバッチ保存（タイムアウト回避）
+    // 100件ずつバッチ保存
     for (let i = 0; i < toSave.length; i += 100) {
       await prisma.delivery.createMany({ data: toSave.slice(i, i + 100) })
     }
 
     return NextResponse.json({
       imported: toSave.length,
-      skipped: errors.length,
+      skipped:  errors.length,
       preview,
       mapping,
     })
