@@ -5,6 +5,14 @@ import { getTokenFromRequest } from '@/lib/auth'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// 半角・全角・大小文字を統一して比較用に正規化
+function norm(s: string): string {
+  return s
+    .normalize('NFKC')          // 全角英数→半角、半角ｶﾅ→全角カナ
+    .toLowerCase()
+    .replace(/[\s　・\-－_]/g, '') // スペース・区切り文字を除去
+}
+
 export async function POST(req: NextRequest) {
   const user = getTokenFromRequest(req)
   if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
@@ -12,44 +20,55 @@ export async function POST(req: NextRequest) {
   const { message } = await req.json()
   if (!message) return NextResponse.json({ error: 'メッセージが必要です' }, { status: 400 })
 
-  // 3ヶ月より古いデータは除外、それ以降（過去3ヶ月〜未来）は全件取得
-  const threeMonthsAgo = new Date()
-  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
 
-  const deliveries = await prisma.delivery.findMany({
+  // 未来の納期データを全件取得（今日以降）
+  const futureDeliveries = await prisma.delivery.findMany({
     where: {
       companyId: user.companyId,
-      deliveryDate: { gte: threeMonthsAgo },
+      deliveryDate: { gte: today },
     },
     orderBy: { deliveryDate: 'asc' },
   })
 
-  const total = await prisma.delivery.count({ where: { companyId: user.companyId } })
+  // メッセージを正規化してキーワード抽出（2文字以上の単語）
+  const msgNorm = norm(message)
+  const keywords = msgNorm.match(/[^\s,、。！？「」【】()（）]+/g)
+    ?.filter(w => w.length >= 2) ?? [msgNorm]
 
-  const deliveryContext = deliveries.map(d =>
-    `- ${d.productName}: ${d.quantity}個, 納期: ${d.deliveryDate.toLocaleDateString('ja-JP')}, ステータス: ${d.status}${d.notes ? ', 備考: ' + d.notes : ''}`
+  // キーワードに一致する商品を絞り込み（半角・全角を同一視）
+  const matched = futureDeliveries.filter(d => {
+    const nameNorm = norm(d.productName)
+    return keywords.some(kw => nameNorm.includes(kw) || kw.includes(nameNorm))
+  })
+
+  // 一致あり → そのデータのみ、なし → 直近50件をコンテキストに使用
+  const contextData = matched.length > 0 ? matched : futureDeliveries.slice(0, 50)
+
+  const lines = contextData.map(d =>
+    `- ${d.productName}: ${d.quantity}個, 納期: ${d.deliveryDate.toLocaleDateString('ja-JP')}, ステータス: ${d.status}${d.supplierName ? ', 取引先: ' + d.supplierName : ''}${d.notes ? ', 備考: ' + d.notes : ''}`
   ).join('\n')
+
+  const systemPrompt = matched.length > 0
+    ? `あなたは納期管理アシスタントです。ユーザーが問い合わせた商品の未来の納期データを以下に示します。この情報を元に納期・数量を分かりやすく回答してください。\n\n該当データ（${matched.length}件）:\n${lines}`
+    : `あなたは納期管理アシスタントです。直近の入荷予定データ（${contextData.length}件）を以下に示します。ユーザーの質問に答えてください。商品名で質問すると該当商品の納期をお答えできます。\n\n入荷予定データ:\n${lines || 'データなし'}`
 
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
-    system: `あなたは納期管理アシスタントです。以下の入荷予定データ（直近データ${deliveries.length}件／全${total}件）を参照して質問に答えてください。データに関係ない質問には「納期管理に関する質問をお願いします」と答えてください。\n\n入荷予定データ:\n${deliveryContext || 'データなし'}`,
-    messages: [{ role: 'user', content: message }]
+    system: systemPrompt,
+    messages: [{ role: 'user', content: message }],
   })
 
-  const content = response.content[0]
-  const text = content.type === 'text' ? content.text : ''
+  const text = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  const mentioned = deliveries.filter(d =>
-    text.includes(d.productName) || message.includes(d.productName)
-  ).slice(0, 5)
+  // レスポンスカードに表示する関連データ（一致したもの優先、最大10件）
+  const cards = (matched.length > 0 ? matched : []).slice(0, 10).map(d => ({
+    product_name: d.productName,
+    quantity: d.quantity,
+    delivery_date: d.deliveryDate.toISOString().split('T')[0],
+  }))
 
-  return NextResponse.json({
-    response: text,
-    deliveries: mentioned.map(d => ({
-      product_name: d.productName,
-      quantity: d.quantity,
-      delivery_date: d.deliveryDate.toISOString().split('T')[0]
-    }))
-  })
+  return NextResponse.json({ response: text, deliveries: cards })
 }
