@@ -12,10 +12,22 @@ export async function POST(req: NextRequest) {
   const { message } = await req.json()
   if (!message) return NextResponse.json({ error: 'メッセージが必要です' }, { status: 400 })
 
+  // 直近180日以内 + 未処理・遅延を優先、最大150件に絞る
+  const since = new Date()
+  since.setDate(since.getDate() - 30)
+  const until = new Date()
+  until.setDate(until.getDate() + 150)
+
   const deliveries = await prisma.delivery.findMany({
-    where: { companyId: user.companyId },
-    orderBy: { deliveryDate: 'asc' }
+    where: {
+      companyId: user.companyId,
+      deliveryDate: { gte: since, lte: until },
+    },
+    orderBy: { deliveryDate: 'asc' },
+    take: 150,
   })
+
+  const total = await prisma.delivery.count({ where: { companyId: user.companyId } })
 
   const deliveryContext = deliveries.map(d =>
     `- ${d.productName}: ${d.quantity}個, 納期: ${d.deliveryDate.toLocaleDateString('ja-JP')}, ステータス: ${d.status}${d.notes ? ', 備考: ' + d.notes : ''}`
@@ -24,7 +36,7 @@ export async function POST(req: NextRequest) {
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
-    system: `あなたは納期管理アシスタントです。以下の入荷予定データを参照して質問に答えてください。\n\n入荷予定データ:\n${deliveryContext || 'データなし'}`,
+    system: `あなたは納期管理アシスタントです。以下の入荷予定データ（直近データ${deliveries.length}件／全${total}件）を参照して質問に答えてください。データに関係ない質問には「納期管理に関する質問をお願いします」と答えてください。\n\n入荷予定データ:\n${deliveryContext || 'データなし'}`,
     messages: [{ role: 'user', content: message }]
   })
 
