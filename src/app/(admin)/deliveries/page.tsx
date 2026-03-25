@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
-import axios from 'axios'
 import { authHeaders } from '@/lib/auth-context'
+import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -26,12 +33,30 @@ interface Delivery {
   deliveryDate: string
   status: string
   notes?: string
+  sourceType: string
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  PENDING: '未処理',
+  SHIPPED: '出荷済み',
+  DELIVERED: '納品済み',
+  DELAYED: '遅延',
+  CANCELLED: 'キャンセル',
+}
+
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  PENDING: 'secondary',
+  SHIPPED: 'default',
+  DELIVERED: 'outline',
+  DELAYED: 'destructive',
+  CANCELLED: 'secondary',
 }
 
 const emptyForm = {
   productName: '',
   quantity: '',
   deliveryDate: '',
+  status: 'PENDING',
   notes: '',
 }
 
@@ -46,21 +71,19 @@ export default function DeliveriesPage() {
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchDeliveries()
-  }, [])
-
   const fetchDeliveries = async () => {
     setLoading(true)
     try {
-      const res = await axios.get('/api/mobile/deliveries', { headers: authHeaders() })
-      setDeliveries(res.data)
+      const data = await apiFetch<Delivery[]>('/api/mobile/deliveries', { headers: authHeaders() })
+      setDeliveries(data)
     } catch {
       toast.error('データの取得に失敗しました')
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => { fetchDeliveries() }, [])
 
   const openCreate = () => {
     setEditTarget(null)
@@ -74,6 +97,7 @@ export default function DeliveriesPage() {
       productName: d.productName,
       quantity: String(d.quantity),
       deliveryDate: d.deliveryDate.split('T')[0],
+      status: d.status,
       notes: d.notes ?? '',
     })
     setDialogOpen(true)
@@ -86,27 +110,33 @@ export default function DeliveriesPage() {
     }
     setSaving(true)
     try {
+      const body = {
+        productName: form.productName,
+        quantity: parseInt(form.quantity),
+        deliveryDate: form.deliveryDate,
+        status: form.status,
+        notes: form.notes || null,
+        sourceType: 'MANUAL',
+      }
       if (editTarget) {
-        await axios.put(`/api/mobile/deliveries/${editTarget.id}`, {
-          productName: form.productName,
-          quantity: parseInt(form.quantity),
-          deliveryDate: form.deliveryDate,
-          notes: form.notes || null,
-        }, { headers: authHeaders() })
+        await apiFetch(`/api/mobile/deliveries/${editTarget.id}`, {
+          method: 'PUT',
+          body,
+          headers: authHeaders(),
+        })
         toast.success('更新しました')
       } else {
-        await axios.post('/api/mobile/deliveries', {
-          productName: form.productName,
-          quantity: parseInt(form.quantity),
-          deliveryDate: form.deliveryDate,
-          notes: form.notes || null,
-        }, { headers: authHeaders() })
+        await apiFetch('/api/mobile/deliveries', {
+          method: 'POST',
+          body,
+          headers: authHeaders(),
+        })
         toast.success('追加しました')
       }
       setDialogOpen(false)
       fetchDeliveries()
-    } catch {
-      toast.error('保存に失敗しました')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '保存に失敗しました')
     } finally {
       setSaving(false)
     }
@@ -114,33 +144,16 @@ export default function DeliveriesPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await axios.delete(`/api/mobile/deliveries/${id}`, { headers: authHeaders() })
+      await apiFetch(`/api/mobile/deliveries/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      })
       toast.success('削除しました')
       setDeleteId(null)
       fetchDeliveries()
     } catch {
       toast.error('削除に失敗しました')
     }
-  }
-
-  const getStatusLabel = (status: string) => {
-    const map: Record<string, string> = {
-      PENDING: '待機中',
-      IN_PROGRESS: '進行中',
-      COMPLETED: '完了',
-      CANCELLED: 'キャンセル',
-    }
-    return map[status] ?? status
-  }
-
-  const getStatusVariant = (status: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    const map: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-      PENDING: 'secondary',
-      IN_PROGRESS: 'default',
-      COMPLETED: 'outline',
-      CANCELLED: 'destructive',
-    }
-    return map[status] ?? 'secondary'
   }
 
   const filtered = deliveries.filter(d =>
@@ -158,7 +171,6 @@ export default function DeliveriesPage() {
         </Button>
       </div>
 
-      {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
@@ -177,6 +189,7 @@ export default function DeliveriesPage() {
         <Card>
           <CardContent className="text-center py-12">
             <p className="text-[#64748B]">データがありません</p>
+            <p className="text-sm text-[#64748B] mt-1">「新規追加」ボタンから入荷情報を登録してください</p>
           </CardContent>
         </Card>
       ) : (
@@ -188,7 +201,9 @@ export default function DeliveriesPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-[#102A43]">{d.productName}</h3>
-                      <Badge variant={getStatusVariant(d.status)}>{getStatusLabel(d.status)}</Badge>
+                      <Badge variant={STATUS_VARIANT[d.status] ?? 'secondary'}>
+                        {STATUS_LABEL[d.status] ?? d.status}
+                      </Badge>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-[#64748B]">
                       <span>数量: {d.quantity}個</span>
@@ -198,12 +213,8 @@ export default function DeliveriesPage() {
                       <p className="mt-1 text-xs text-[#64748B] truncate">{d.notes}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEdit(d)}
-                    >
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(d)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                     {isAdmin && (
@@ -256,6 +267,21 @@ export default function DeliveriesPage() {
                 value={form.deliveryDate}
                 onChange={e => setForm(f => ({ ...f, deliveryDate: e.target.value }))}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>ステータス</Label>
+              <Select value={form.status} onValueChange={val => setForm(f => ({ ...f, status: val }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">未処理</SelectItem>
+                  <SelectItem value="SHIPPED">出荷済み</SelectItem>
+                  <SelectItem value="DELIVERED">納品済み</SelectItem>
+                  <SelectItem value="DELAYED">遅延</SelectItem>
+                  <SelectItem value="CANCELLED">キャンセル</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>備考</Label>

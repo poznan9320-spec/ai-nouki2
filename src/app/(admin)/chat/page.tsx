@@ -1,12 +1,11 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import axios from 'axios'
 import { authHeaders } from '@/lib/auth-context'
+import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
 import { Send, Bot, User, Package } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -45,20 +44,17 @@ export default function ChatPage() {
   const sendMessage = async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed) return
-    const userMsg: Message = { role: 'user', content: trimmed }
-    setMessages(m => [...m, userMsg])
+    setMessages(m => [...m, { role: 'user', content: trimmed }])
     setInput('')
     setLoading(true)
     try {
-      const res = await axios.post('/api/admin/chat', { message: trimmed }, { headers: authHeaders() })
-      const assistantMsg: Message = {
-        role: 'assistant',
-        content: res.data.response,
-        deliveries: res.data.deliveries,
-      }
-      setMessages(m => [...m, assistantMsg])
-    } catch {
-      toast.error('送信に失敗しました')
+      const data = await apiFetch<{ response: string; deliveries?: DeliveryRef[] }>(
+        '/api/admin/chat',
+        { method: 'POST', body: { message: trimmed }, headers: authHeaders() }
+      )
+      setMessages(m => [...m, { role: 'assistant', content: data.response, deliveries: data.deliveries }])
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '送信に失敗しました')
       setMessages(m => m.slice(0, -1))
     } finally {
       setLoading(false)
@@ -86,13 +82,7 @@ export default function ChatPage() {
               <p className="text-[#64748B] mb-6">入荷データについて何でもお聞きください</p>
               <div className="flex flex-wrap gap-2 justify-center">
                 {SUGGESTED.map(s => (
-                  <Button
-                    key={s}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => sendMessage(s)}
-                    className="text-xs"
-                  >
+                  <Button key={s} variant="outline" size="sm" onClick={() => sendMessage(s)} className="text-xs">
                     {s}
                   </Button>
                 ))}
@@ -108,13 +98,11 @@ export default function ChatPage() {
                     </div>
                   )}
                   <div className={`max-w-[80%] space-y-2 ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
-                    <div
-                      className={`px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap ${
-                        msg.role === 'user'
-                          ? 'bg-[#102A43] text-white rounded-tr-sm'
-                          : 'bg-gray-100 text-[#102A43] rounded-tl-sm'
-                      }`}
-                    >
+                    <div className={`px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap ${
+                      msg.role === 'user'
+                        ? 'bg-[#102A43] text-white rounded-tr-sm'
+                        : 'bg-gray-100 text-[#102A43] rounded-tl-sm'
+                    }`}>
                       {msg.content}
                     </div>
                     {msg.deliveries && msg.deliveries.length > 0 && (

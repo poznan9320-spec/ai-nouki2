@@ -1,6 +1,5 @@
 'use client'
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import axios from 'axios'
 
 interface User {
   id: string
@@ -20,7 +19,6 @@ interface AuthContextType {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (companyName: string, email: string, password: string, name: string) => Promise<void>
-  registerEmployee: (companyId: string, email: string, password: string, name: string) => Promise<void>
   logout: () => void
   isAdmin: boolean
 }
@@ -37,6 +35,13 @@ const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('tok
 const setToken = (t: string) => localStorage.setItem('token', t)
 const removeToken = () => localStorage.removeItem('token')
 
+async function apiFetch(url: string, options: RequestInit = {}) {
+  const res = await fetch(url, options)
+  const data = await res.json()
+  if (!res.ok) throw new Error(data?.error || `エラー (${res.status})`)
+  return data
+}
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [company, setCompany] = useState<Company | null>(null)
@@ -46,11 +51,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const token = getToken()
     if (!token) { setLoading(false); return }
     try {
-      const res = await axios.get('/api/auth/me', {
+      const data = await apiFetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${token}` }
       })
-      setUser(res.data.user)
-      setCompany(res.data.company)
+      setUser(data.user)
+      setCompany(data.company)
     } catch {
       removeToken()
       setUser(null)
@@ -62,24 +67,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => { checkAuth() }, [checkAuth])
 
   const login = async (email: string, password: string) => {
-    const res = await axios.post('/api/mobile/login', { email, password })
-    setToken(res.data.token)
-    setUser(res.data.user)
-    setCompany(res.data.company)
+    const data = await apiFetch('/api/mobile/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    setToken(data.token)
+    setUser(data.user)
+    setCompany(data.company)
   }
 
   const register = async (companyName: string, email: string, password: string, name: string) => {
-    const res = await axios.post('/api/mobile/register', { companyName, email, password, name })
-    setToken(res.data.token)
-    setUser(res.data.user)
-    setCompany(res.data.company)
-  }
-
-  const registerEmployee = async (companyId: string, email: string, password: string, name: string) => {
-    const res = await axios.post('/api/mobile/register-employee', { companyId, email, password, name })
-    setToken(res.data.token)
-    setUser(res.data.user)
-    setCompany(res.data.company)
+    const data = await apiFetch('/api/mobile/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyName, email, password, name }),
+    })
+    setToken(data.token)
+    setUser(data.user)
+    setCompany(data.company)
   }
 
   const logout = () => {
@@ -90,15 +96,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, company, loading, login, register, registerEmployee, logout,
-      isAdmin: user?.role === 'ADMIN'
+      user, company, loading, login, register, logout,
+      isAdmin: user?.role === 'ADMIN',
     }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-export const authHeaders = () => {
+export function authHeaders(): Record<string, string> {
   const token = getToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  const base: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) base['Authorization'] = `Bearer ${token}`
+  return base
 }

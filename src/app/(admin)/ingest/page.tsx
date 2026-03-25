@@ -1,6 +1,5 @@
 'use client'
 import { useState, useRef } from 'react'
-import axios from 'axios'
 import { authHeaders } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,31 +8,26 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { Upload, FileText, Image, Check, Plus } from 'lucide-react'
+import { Upload, FileText, ImageIcon, Check } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface ImportedItem {
   productName: string
   quantity: number
   deliveryDate: string
+  notes?: string
 }
 
 export default function IngestPage() {
-  // OCR / text tab
   const [ocrFile, setOcrFile] = useState<File | null>(null)
   const [ocrText, setOcrText] = useState('')
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrResults, setOcrResults] = useState<ImportedItem[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // CSV tab
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [csvLoading, setCsvLoading] = useState(false)
-  const [csvResults, setCsvResults] = useState<ImportedItem[]>([])
-
-  // Saving
-  const [savingIds, setSavingIds] = useState<Set<number>>(new Set())
-  const [savedIds, setSavedIds] = useState<Set<number>>(new Set())
+  const [csvCount, setCsvCount] = useState<number | null>(null)
 
   const handleOcrSubmit = async () => {
     if (!ocrFile && !ocrText.trim()) {
@@ -44,16 +38,25 @@ export default function IngestPage() {
     setOcrResults([])
     try {
       const formData = new FormData()
-      if (ocrFile) formData.append('image', ocrFile)
+      if (ocrFile) formData.append('file', ocrFile)
       if (ocrText.trim()) formData.append('text', ocrText.trim())
-      const res = await axios.post('/api/ingest/ocr', formData, {
-        headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' }
+
+      const h = { ...authHeaders() }
+      delete h['Content-Type'] // Let browser set multipart boundary
+
+      const res = await fetch('/api/ingest/ocr', {
+        method: 'POST',
+        headers: h,
+        body: formData,
       })
-      const items: ImportedItem[] = res.data.items || []
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'OCR処理に失敗しました')
+
+      const items: ImportedItem[] = data.items ?? []
       setOcrResults(items)
-      toast.success(`${items.length}件のデータを取込みました`)
-    } catch {
-      toast.error('OCR処理に失敗しました')
+      toast.success(`${items.length}件のデータをDBに登録しました`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'OCR処理に失敗しました')
     } finally {
       setOcrLoading(false)
     }
@@ -65,83 +68,29 @@ export default function IngestPage() {
       return
     }
     setCsvLoading(true)
-    setCsvResults([])
+    setCsvCount(null)
     try {
       const formData = new FormData()
       formData.append('file', csvFile)
-      const res = await axios.post('/api/ingest/csv', formData, {
-        headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' }
+
+      const h = { ...authHeaders() }
+      delete h['Content-Type']
+
+      const res = await fetch('/api/ingest/csv', {
+        method: 'POST',
+        headers: h,
+        body: formData,
       })
-      const items: ImportedItem[] = res.data.items || []
-      setCsvResults(items)
-      toast.success(`${items.length}件のデータを取込みました`)
-    } catch {
-      toast.error('CSV処理に失敗しました')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'CSV処理に失敗しました')
+
+      setCsvCount(data.imported ?? 0)
+      toast.success(`${data.imported}件のデータをDBに登録しました`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'CSV処理に失敗しました')
     } finally {
       setCsvLoading(false)
     }
-  }
-
-  const saveItem = async (item: ImportedItem, index: number) => {
-    setSavingIds(s => new Set(s).add(index))
-    try {
-      await axios.post('/api/mobile/deliveries', {
-        productName: item.productName,
-        quantity: item.quantity,
-        deliveryDate: item.deliveryDate,
-      }, { headers: authHeaders() })
-      setSavedIds(s => new Set(s).add(index))
-      toast.success(`${item.productName} を保存しました`)
-    } catch {
-      toast.error('保存に失敗しました')
-    } finally {
-      setSavingIds(s => { const n = new Set(s); n.delete(index); return n })
-    }
-  }
-
-  const renderResults = (items: ImportedItem[], prefix: string) => {
-    if (items.length === 0) return null
-    return (
-      <div className="mt-4 space-y-3">
-        <h3 className="font-semibold text-[#102A43]">取込結果 ({items.length}件)</h3>
-        {items.map((item, i) => {
-          const key = prefix === 'ocr' ? i : 1000 + i
-          const isSaving = savingIds.has(key)
-          const isSaved = savedIds.has(key)
-          return (
-            <div key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div>
-                <p className="font-medium text-[#102A43]">{item.productName}</p>
-                <p className="text-sm text-[#64748B]">
-                  数量: {item.quantity}個 | 納期: {item.deliveryDate}
-                </p>
-              </div>
-              {isSaved ? (
-                <Badge variant="outline" className="text-green-600 border-green-300">
-                  <Check className="h-3 w-3 mr-1" />
-                  保存済
-                </Badge>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => saveItem(item, key)}
-                  disabled={isSaving}
-                  className="shrink-0"
-                >
-                  {isSaving ? '保存中...' : (
-                    <>
-                      <Plus className="h-3 w-3 mr-1" />
-                      保存
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    )
   }
 
   return (
@@ -154,7 +103,7 @@ export default function IngestPage() {
       <Tabs defaultValue="ocr">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="ocr" className="flex items-center gap-2">
-            <Image className="h-4 w-4" />
+            <ImageIcon className="h-4 w-4" />
             OCR / テキスト
           </TabsTrigger>
           <TabsTrigger value="csv" className="flex items-center gap-2">
@@ -168,7 +117,7 @@ export default function IngestPage() {
             <CardHeader>
               <CardTitle>OCR / テキスト取込</CardTitle>
               <CardDescription>
-                納品書の画像をアップロード、またはテキストを貼り付けてAIで解析します
+                納品書の画像をアップロード、またはテキストを貼り付けてAIで解析・登録します
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -187,7 +136,7 @@ export default function IngestPage() {
                     <div className="text-[#64748B]">
                       <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       <p className="text-sm">クリックして画像を選択</p>
-                      <p className="text-xs mt-1">PNG, JPG, GIF 対応</p>
+                      <p className="text-xs mt-1">PNG, JPG 対応</p>
                     </div>
                   )}
                   <input
@@ -203,8 +152,8 @@ export default function IngestPage() {
               <div className="space-y-2">
                 <Label>テキスト（任意）</Label>
                 <Textarea
-                  placeholder="納品書のテキストを貼り付けてください..."
-                  rows={6}
+                  placeholder="例: 来月5日に部品Aを100個納品してください"
+                  rows={5}
                   value={ocrText}
                   onChange={e => setOcrText(e.target.value)}
                 />
@@ -215,10 +164,32 @@ export default function IngestPage() {
                 disabled={ocrLoading}
                 className="w-full bg-[#102A43] hover:bg-[#1a3a5c]"
               >
-                {ocrLoading ? '解析中...' : 'AIで解析する'}
+                {ocrLoading ? '解析中...' : 'AIで解析・登録する'}
               </Button>
 
-              {renderResults(ocrResults, 'ocr')}
+              {ocrResults.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <h3 className="font-semibold text-[#102A43] flex items-center gap-2">
+                    <Check className="h-4 w-4 text-green-600" />
+                    登録済み ({ocrResults.length}件)
+                  </h3>
+                  {ocrResults.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                      <div>
+                        <p className="font-medium text-[#102A43]">{item.productName}</p>
+                        <p className="text-sm text-[#64748B]">
+                          数量: {item.quantity}個 | 納期: {item.deliveryDate}
+                        </p>
+                        {item.notes && <p className="text-xs text-[#64748B]">{item.notes}</p>}
+                      </div>
+                      <Badge variant="outline" className="text-green-600 border-green-300 shrink-0">
+                        <Check className="h-3 w-3 mr-1" />
+                        登録済
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -228,14 +199,15 @@ export default function IngestPage() {
             <CardHeader>
               <CardTitle>CSV取込</CardTitle>
               <CardDescription>
-                CSVファイルをアップロードして入荷データを一括取込します
+                CSVファイルをアップロードして入荷データを一括取込・登録します
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                <p className="font-medium">CSVフォーマット:</p>
-                <p className="mt-1 font-mono text-xs">商品名,数量,納期(YYYY-MM-DD)</p>
-                <p className="font-mono text-xs">例: りんご,100,2026-04-01</p>
+                <p className="font-medium">CSVフォーマット (ヘッダー行必須):</p>
+                <p className="mt-1 font-mono text-xs">productName,quantity,deliveryDate</p>
+                <p className="font-mono text-xs">部品A,100,2026-04-01</p>
+                <p className="mt-1 text-xs">または: 商品名,数量,納期 （日本語ヘッダーも対応）</p>
               </div>
 
               <div className="space-y-2">
@@ -255,7 +227,15 @@ export default function IngestPage() {
                 {csvLoading ? '処理中...' : 'CSVを取込む'}
               </Button>
 
-              {renderResults(csvResults, 'csv')}
+              {csvCount !== null && (
+                <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200 flex items-center gap-3">
+                  <Check className="h-5 w-5 text-green-600 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-green-800">{csvCount}件のデータを登録しました</p>
+                    <p className="text-sm text-green-600">入荷管理ページで確認できます</p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

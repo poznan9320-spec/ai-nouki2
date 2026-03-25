@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
-import axios from 'axios'
 import { authHeaders } from '@/lib/auth-context'
+import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -24,17 +24,14 @@ export default function NotificationsPage() {
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [markingAll, setMarkingAll] = useState(false)
 
-  useEffect(() => {
-    fetchNotifications()
-  }, [unreadOnly])
-
   const fetchNotifications = async () => {
     setLoading(true)
     try {
-      const res = await axios.get(`/api/mobile/notifications${unreadOnly ? '?unread_only=true' : ''}`, {
-        headers: authHeaders()
-      })
-      setNotifications(res.data)
+      const data = await apiFetch<Notification[]>(
+        `/api/mobile/notifications${unreadOnly ? '?unread_only=true' : ''}`,
+        { headers: authHeaders() }
+      )
+      setNotifications(data)
     } catch {
       toast.error('通知の取得に失敗しました')
     } finally {
@@ -42,9 +39,14 @@ export default function NotificationsPage() {
     }
   }
 
+  useEffect(() => { fetchNotifications() }, [unreadOnly])
+
   const markRead = async (id: string) => {
     try {
-      await axios.put(`/api/mobile/notifications/${id}/read`, {}, { headers: authHeaders() })
+      await apiFetch(`/api/mobile/notifications/${id}/read`, {
+        method: 'PUT',
+        headers: authHeaders(),
+      })
       setNotifications(n => n.map(notif =>
         notif.notification_id === id ? { ...notif, is_read: true } : notif
       ))
@@ -56,7 +58,10 @@ export default function NotificationsPage() {
   const markAllRead = async () => {
     setMarkingAll(true)
     try {
-      await axios.put('/api/mobile/notifications/read-all', {}, { headers: authHeaders() })
+      await apiFetch('/api/mobile/notifications/read-all', {
+        method: 'PUT',
+        headers: authHeaders(),
+      })
       setNotifications(n => n.map(notif => ({ ...notif, is_read: true })))
       toast.success('すべて既読にしました')
     } catch {
@@ -68,16 +73,16 @@ export default function NotificationsPage() {
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'delivery': return <Package className="h-4 w-4" />
-      case 'alert': return <AlertCircle className="h-4 w-4" />
+      case 'delivery_update': return <Package className="h-4 w-4" />
+      case 'order_status': return <AlertCircle className="h-4 w-4" />
       default: return <Info className="h-4 w-4" />
     }
   }
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'delivery': return 'text-blue-600 bg-blue-50'
-      case 'alert': return 'text-red-600 bg-red-50'
+      case 'delivery_update': return 'text-blue-600 bg-blue-50'
+      case 'order_status': return 'text-orange-600 bg-orange-50'
       default: return 'text-gray-600 bg-gray-50'
     }
   }
@@ -104,12 +109,7 @@ export default function NotificationsPage() {
             {unreadOnly ? '未読のみ' : '全て表示'}
           </Button>
           {unreadCount > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={markAllRead}
-              disabled={markingAll}
-            >
+            <Button variant="outline" size="sm" onClick={markAllRead} disabled={markingAll}>
               <CheckCheck className="h-4 w-4 mr-1" />
               全て既読
             </Button>

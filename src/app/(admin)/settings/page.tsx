@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import axios from 'axios'
 import { authHeaders } from '@/lib/auth-context'
+import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -41,12 +41,12 @@ export default function SettingsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [companyRes, usersRes] = await Promise.all([
-        axios.get('/api/mobile/company', { headers: authHeaders() }),
-        isAdmin ? axios.get('/api/mobile/users', { headers: authHeaders() }) : Promise.resolve(null),
-      ])
-      setCompany(companyRes.data)
-      if (usersRes) setUsers(usersRes.data)
+      const companyData = await apiFetch<CompanyInfo>('/api/mobile/company', { headers: authHeaders() })
+      setCompany(companyData)
+      if (isAdmin) {
+        const usersData = await apiFetch<UserInfo[]>('/api/mobile/users', { headers: authHeaders() })
+        setUsers(usersData)
+      }
     } catch {
       toast.error('データの取得に失敗しました')
     } finally {
@@ -54,14 +54,16 @@ export default function SettingsPage() {
     }
   }, [isAdmin])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  useEffect(() => { fetchData() }, [fetchData])
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     setUpdatingRole(userId)
     try {
-      await axios.put(`/api/mobile/users/${userId}/role`, { role: newRole }, { headers: authHeaders() })
+      await apiFetch(`/api/mobile/users/${userId}/role`, {
+        method: 'PUT',
+        body: { role: newRole },
+        headers: authHeaders(),
+      })
       setUsers(u => u.map(user =>
         user.user_id === userId ? { ...user, role: newRole } : user
       ))
@@ -169,38 +171,42 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {users.map(u => (
-                <div key={u.user_id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <Avatar className="h-9 w-9 shrink-0">
-                    <AvatarFallback className="bg-[#102A43] text-white text-xs">
-                      {getInitials(u.name, u.email)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-[#102A43] truncate">{u.name || u.email}</p>
-                    <p className="text-xs text-[#64748B] truncate">{u.email}</p>
+              {users.length === 0 ? (
+                <p className="text-sm text-[#64748B] text-center py-4">メンバーがいません</p>
+              ) : (
+                users.map(u => (
+                  <div key={u.user_id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <Avatar className="h-9 w-9 shrink-0">
+                      <AvatarFallback className="bg-[#102A43] text-white text-xs">
+                        {getInitials(u.name, u.email)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-[#102A43] truncate">{u.name || u.email}</p>
+                      <p className="text-xs text-[#64748B] truncate">{u.email}</p>
+                    </div>
+                    {u.user_id === currentUser?.id ? (
+                      <Badge variant={getRoleVariant(u.role)} className="shrink-0">
+                        {getRoleLabel(u.role)}
+                      </Badge>
+                    ) : (
+                      <Select
+                        value={u.role}
+                        onValueChange={val => handleRoleChange(u.user_id, val)}
+                        disabled={updatingRole === u.user_id}
+                      >
+                        <SelectTrigger className="w-28 shrink-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ADMIN">管理者</SelectItem>
+                          <SelectItem value="EMPLOYEE">従業員</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
-                  {u.user_id === currentUser?.id ? (
-                    <Badge variant={getRoleVariant(u.role)} className="shrink-0">
-                      {getRoleLabel(u.role)}
-                    </Badge>
-                  ) : (
-                    <Select
-                      value={u.role}
-                      onValueChange={val => handleRoleChange(u.user_id, val)}
-                      disabled={updatingRole === u.user_id}
-                    >
-                      <SelectTrigger className="w-28 shrink-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ADMIN">管理者</SelectItem>
-                        <SelectItem value="EMPLOYEE">従業員</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

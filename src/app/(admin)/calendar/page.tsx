@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import axios from 'axios'
 import { authHeaders } from '@/lib/auth-context'
+import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -31,10 +31,11 @@ export default function CalendarPage() {
   const fetchCalendar = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await axios.get(`/api/mobile/calendar?year=${year}&month=${month}`, {
-        headers: authHeaders()
-      })
-      setCalendarData(res.data)
+      const data = await apiFetch<CalendarData>(
+        `/api/mobile/calendar?year=${year}&month=${month}`,
+        { headers: authHeaders() }
+      )
+      setCalendarData(data)
     } catch {
       toast.error('カレンダーデータの取得に失敗しました')
     } finally {
@@ -42,9 +43,7 @@ export default function CalendarPage() {
     }
   }, [year, month])
 
-  useEffect(() => {
-    fetchCalendar()
-  }, [fetchCalendar])
+  useEffect(() => { fetchCalendar() }, [fetchCalendar])
 
   const prevMonth = () => {
     if (month === 1) { setYear(y => y - 1); setMonth(12) }
@@ -58,7 +57,6 @@ export default function CalendarPage() {
     setSelectedDate(null)
   }
 
-  // Build calendar grid
   const firstDay = new Date(year, month - 1, 1).getDay()
   const daysInMonth = new Date(year, month, 0).getDate()
   const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7
@@ -97,7 +95,6 @@ export default function CalendarPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Calendar grid */}
           <div className="lg:col-span-2">
             <Card>
               <CardContent className="p-3">
@@ -120,7 +117,6 @@ export default function CalendarPage() {
                     const isToday = dateKey === todayStr
                     const isSelected = dateKey === selectedDate
                     const dayOfWeek = (firstDay + day - 1) % 7
-
                     return (
                       <button
                         key={i}
@@ -155,7 +151,6 @@ export default function CalendarPage() {
             </Card>
           </div>
 
-          {/* Detail panel */}
           <div>
             <Card className="h-full">
               <CardContent className="p-4">
