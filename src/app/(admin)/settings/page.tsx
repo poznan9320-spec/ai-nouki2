@@ -39,6 +39,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [updatingRole, setUpdatingRole] = useState<string | null>(null)
   const [deletingAll, setDeletingAll] = useState(false)
+  const [deletingPast, setDeletingPast] = useState(false)
 
   // 取引先管理
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([])
@@ -124,6 +125,27 @@ export default function SettingsPage() {
       toast.success('取引先を削除しました')
     } catch {
       toast.error('削除に失敗しました')
+    }
+  }
+
+  const handleDeletePast = async () => {
+    if (!confirm('今日より前の納期データをすべて削除します。よろしいですか？')) return
+    setDeletingPast(true)
+    try {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const res = await fetch('/api/mobile/deliveries', {
+        method: 'DELETE',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ before: today.toISOString() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || '削除に失敗しました')
+      toast.success(`${data.deleted}件の過去データを削除しました`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '削除に失敗しました')
+    } finally {
+      setDeletingPast(false)
     }
   }
 
@@ -280,7 +302,22 @@ export default function SettingsPage() {
             </CardTitle>
             <CardDescription>取込んだ納期データの一括削除</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
+            <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+              <div>
+                <p className="font-medium text-orange-800 text-sm">過去データを削除</p>
+                <p className="text-xs text-orange-600 mt-0.5">今日より前の納期データをすべて削除します</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                onClick={handleDeletePast}
+                disabled={deletingPast}
+              >
+                {deletingPast ? '削除中...' : '過去を削除'}
+              </Button>
+            </div>
             <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
               <div>
                 <p className="font-medium text-red-800 text-sm">全データを削除</p>

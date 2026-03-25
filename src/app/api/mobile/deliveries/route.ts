@@ -34,7 +34,7 @@ export async function DELETE(req: NextRequest) {
   if (user.role !== 'ADMIN') return NextResponse.json({ error: '権限がありません' }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))
-  const ids = (body as { ids?: string[] }).ids
+  const { ids, before } = body as { ids?: string[]; before?: string }
 
   if (ids && ids.length > 0) {
     // 指定IDのみ削除
@@ -44,7 +44,15 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ deleted: count })
   }
 
-  // IDなし → 全削除
+  if (before) {
+    // 指定日より前のデータを削除
+    const { count } = await prisma.delivery.deleteMany({
+      where: { companyId: user.companyId, deliveryDate: { lt: new Date(before) } },
+    })
+    return NextResponse.json({ deleted: count })
+  }
+
+  // 全削除
   const { count } = await prisma.delivery.deleteMany({ where: { companyId: user.companyId } })
   return NextResponse.json({ deleted: count })
 }
