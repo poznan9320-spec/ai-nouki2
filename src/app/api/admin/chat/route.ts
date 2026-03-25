@@ -12,19 +12,16 @@ export async function POST(req: NextRequest) {
   const { message } = await req.json()
   if (!message) return NextResponse.json({ error: 'メッセージが必要です' }, { status: 400 })
 
-  // 直近180日以内 + 未処理・遅延を優先、最大150件に絞る
-  const since = new Date()
-  since.setDate(since.getDate() - 30)
-  const until = new Date()
-  until.setDate(until.getDate() + 150)
+  // 3ヶ月より古いデータは除外、それ以降（過去3ヶ月〜未来）は全件取得
+  const threeMonthsAgo = new Date()
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
 
   const deliveries = await prisma.delivery.findMany({
     where: {
       companyId: user.companyId,
-      deliveryDate: { gte: since, lte: until },
+      deliveryDate: { gte: threeMonthsAgo },
     },
     orderBy: { deliveryDate: 'asc' },
-    take: 150,
   })
 
   const total = await prisma.delivery.count({ where: { companyId: user.companyId } })
