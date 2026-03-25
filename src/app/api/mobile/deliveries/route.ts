@@ -33,6 +33,18 @@ export async function DELETE(req: NextRequest) {
   if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
   if (user.role !== 'ADMIN') return NextResponse.json({ error: '権限がありません' }, { status: 403 })
 
+  const body = await req.json().catch(() => ({}))
+  const ids = (body as { ids?: string[] }).ids
+
+  if (ids && ids.length > 0) {
+    // 指定IDのみ削除
+    const { count } = await prisma.delivery.deleteMany({
+      where: { id: { in: ids }, companyId: user.companyId },
+    })
+    return NextResponse.json({ deleted: count })
+  }
+
+  // IDなし → 全削除
   const { count } = await prisma.delivery.deleteMany({ where: { companyId: user.companyId } })
   return NextResponse.json({ deleted: count })
 }

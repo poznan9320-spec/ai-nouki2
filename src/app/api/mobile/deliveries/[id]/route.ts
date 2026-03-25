@@ -14,6 +14,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (body.deliveryDate !== undefined) updateData.deliveryDate = new Date(body.deliveryDate)
     if (body.status !== undefined) updateData.status = body.status
     if (body.notes !== undefined) updateData.notes = body.notes ?? null
+    if (body.supplierName !== undefined) updateData.supplierName = body.supplierName ?? null
 
     const delivery = await prisma.delivery.update({
       where: { id, companyId: user.companyId },
