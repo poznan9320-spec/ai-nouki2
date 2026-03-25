@@ -23,6 +23,13 @@ export default function LoginPage() {
   const [adminName, setAdminName] = useState('')
   const [registerLoading, setRegisterLoading] = useState(false)
 
+  // 会社参加フォーム
+  const [joinCompanyId, setJoinCompanyId] = useState('')
+  const [joinEmail, setJoinEmail] = useState('')
+  const [joinPassword, setJoinPassword] = useState('')
+  const [joinName, setJoinName] = useState('')
+  const [joinLoading, setJoinLoading] = useState(false)
+
   useEffect(() => {
     if (!loading && user) router.push('/dashboard')
   }, [user, loading, router])
@@ -58,6 +65,33 @@ export default function LoginPage() {
     }
   }
 
+  const handleJoin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!joinCompanyId || !joinEmail || !joinPassword || !joinName) {
+      toast.error('全ての項目を入力してください')
+      return
+    }
+    setJoinLoading(true)
+    try {
+      const res = await fetch('/api/mobile/register-employee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: joinCompanyId, email: joinEmail, password: joinPassword, name: joinName }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || '登録に失敗しました')
+      toast.success('登録完了しました。ログインしてください')
+      setJoinCompanyId('')
+      setJoinEmail('')
+      setJoinPassword('')
+      setJoinName('')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '登録に失敗しました')
+    } finally {
+      setJoinLoading(false)
+    }
+  }
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyName || !adminEmail || !adminPassword || !adminName) {
@@ -86,8 +120,9 @@ export default function LoginPage() {
         </div>
 
         <Tabs defaultValue="login" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="login">ログイン</TabsTrigger>
+            <TabsTrigger value="join">会社に参加</TabsTrigger>
             <TabsTrigger value="register">新規登録</TabsTrigger>
           </TabsList>
 
@@ -127,6 +162,68 @@ export default function LoginPage() {
                     disabled={loginLoading}
                   >
                     {loginLoading ? 'ログイン中...' : 'ログイン'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="join">
+            <Card>
+              <CardHeader>
+                <CardTitle>会社に参加</CardTitle>
+                <CardDescription>管理者から会社IDを受け取って登録してください</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleJoin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="join-company-id">会社ID</Label>
+                    <Input
+                      id="join-company-id"
+                      placeholder="管理者から受け取った会社ID"
+                      value={joinCompanyId}
+                      onChange={e => setJoinCompanyId(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="join-name">氏名</Label>
+                    <Input
+                      id="join-name"
+                      placeholder="山田 太郎"
+                      value={joinName}
+                      onChange={e => setJoinName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="join-email">メールアドレス</Label>
+                    <Input
+                      id="join-email"
+                      type="email"
+                      placeholder="example@company.com"
+                      value={joinEmail}
+                      onChange={e => setJoinEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="join-password">パスワード</Label>
+                    <Input
+                      id="join-password"
+                      type="password"
+                      placeholder="パスワード"
+                      value={joinPassword}
+                      onChange={e => setJoinPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full bg-[#102A43] hover:bg-[#1a3a5c]"
+                    disabled={joinLoading}
+                  >
+                    {joinLoading ? '登録中...' : '参加する'}
                   </Button>
                 </form>
               </CardContent>
