@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     })
 
     await prisma.notification.createMany({
-      data: admins.map((admin) => ({
+      data: admins.map((admin: { id: string }) => ({
         userId: admin.id,
         title: '新しい発注申請',
         body: `${productName} の発注申請が届きました`,
