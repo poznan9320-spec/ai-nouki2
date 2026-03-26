@@ -11,9 +11,11 @@ export async function GET(req: NextRequest) {
     include: { company: true }
   })
   if (!user) return NextResponse.json({ error: 'ユーザーが見つかりません' }, { status: 404 })
+  if (user.status === 'PENDING') return NextResponse.json({ error: '管理者の承認待ちです' }, { status: 403 })
+  if (user.status === 'REJECTED') return NextResponse.json({ error: 'アカウントが拒否されました' }, { status: 403 })
 
   return NextResponse.json({
-    user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    user: { id: user.id, email: user.email, name: user.name, role: user.role, status: user.status },
     company: { id: user.company.id, name: user.company.name }
   })
 }

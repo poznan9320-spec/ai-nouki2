@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { productName, quantity, deliveryDate, status, sourceType, notes } = body
+    const { productName, quantity, deliveryDate, status, sourceType, notes, supplierName } = body
 
     if (!productName || !quantity || !deliveryDate) {
       return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
         status: status ?? 'PENDING',
         sourceType: sourceType ?? 'MANUAL',
         notes: notes ?? null,
+        supplierName: supplierName ?? null,
         companyId: user.companyId,
       },
     })
