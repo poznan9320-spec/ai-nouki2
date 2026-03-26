@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { put } from '@vercel/blob'
 import { getTokenFromRequest } from '@/lib/auth'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -108,11 +109,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '納期情報を抽出できませんでした' }, { status: 400 })
     }
 
-    // DB保存はしない。フロントエンドで確認後に /api/ingest/save へ送る
+    // ファイルがあればBlobにアップロード
+    let fileUrl: string | null = null
+    if (file && process.env.BLOB_READ_WRITE_TOKEN) {
+      const blob = await put(`deliveries/${Date.now()}_${file.name}`, file, { access: 'public' })
+      fileUrl = blob.url
+    }
+
     return NextResponse.json({
       items: extractedData.items,
       sourceType: file ? 'IMAGE' : 'TEXT',
       supplierName,
+      fileUrl,
     })
   } catch (error) {
     console.error(error)

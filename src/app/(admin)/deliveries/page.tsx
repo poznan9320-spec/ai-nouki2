@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Pencil, Trash2, Search, Building2, Calendar } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Building2, Calendar, FileImage } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Delivery {
@@ -25,6 +25,7 @@ interface Delivery {
   deliveryDate: string
   notes?: string
   supplierName?: string
+  sourceUrl?: string
 }
 
 const emptyForm = {
@@ -268,6 +269,18 @@ export default function DeliveriesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-[#102A43]">{d.productName}</span>
+                        {d.sourceUrl && (
+                          <a
+                            href={d.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="text-[#64748B] hover:text-[#102A43] transition-colors"
+                            title="元ファイルを開く"
+                          >
+                            <FileImage className="h-3.5 w-3.5" />
+                          </a>
+                        )}
                         {label && (
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                             label === '今日' ? 'bg-orange-100 text-orange-700' :

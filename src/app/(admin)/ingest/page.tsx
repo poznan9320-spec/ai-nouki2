@@ -35,6 +35,7 @@ export default function IngestPage() {
   const [selectedOcr, setSelectedOcr] = useState<Set<number>>(new Set())
   const [ocrSaving, setOcrSaving] = useState(false)
   const [ocrSaved, setOcrSaved] = useState(false)
+  const [ocrFileUrl, setOcrFileUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // CSV tab
@@ -78,6 +79,7 @@ export default function IngestPage() {
       const items: ImportedItem[] = data.items ?? []
       setOcrPreview(items)
       setOcrSourceType(data.sourceType ?? 'TEXT')
+      setOcrFileUrl(data.fileUrl ?? null)
       setSelectedOcr(new Set(items.map((_, i) => i)))
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'OCR処理に失敗しました')
@@ -94,7 +96,7 @@ export default function IngestPage() {
       const res = await fetch('/api/ingest/save', {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, supplierName: supplierName.trim() || null, sourceType: ocrSourceType }),
+        body: JSON.stringify({ items, supplierName: supplierName.trim() || null, sourceType: ocrSourceType, sourceUrl: ocrFileUrl }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || '登録に失敗しました')
