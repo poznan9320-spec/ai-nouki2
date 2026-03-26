@@ -98,7 +98,10 @@ export default function IngestPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || '登録に失敗しました')
-      toast.success(`${data.imported}件を登録しました`)
+      const msg = data.skipped > 0
+        ? `${data.imported}件を登録しました（${data.skipped}件は重複のためスキップ）`
+        : `${data.imported}件を登録しました`
+      toast.success(msg)
       setOcrSaved(true)
       setOcrPreview([])
       setSelectedOcr(new Set())
