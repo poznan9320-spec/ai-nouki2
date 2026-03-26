@@ -381,7 +381,7 @@ export default function IngestPage() {
                 <div className="mt-2 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-[#102A43]">
-                      抽出結果（{ocrPreview.length}件）— 登録するものにチェックを入れてください
+                      抽出結果（{ocrPreview.length}件）— 内容を確認・編集して登録してください
                     </p>
                     <button
                       className="text-xs text-[#64748B] underline"
@@ -394,29 +394,77 @@ export default function IngestPage() {
                       {selectedOcr.size === ocrPreview.length ? '全解除' : '全選択'}
                     </button>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {ocrPreview.map((item, i) => (
                       <div
                         key={i}
-                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedOcr.has(i) ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200 opacity-50'
+                        className={`rounded-lg border transition-colors ${
+                          selectedOcr.has(i) ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 bg-gray-50 opacity-60'
                         }`}
-                        onClick={() => setSelectedOcr(prev => {
-                          const next = new Set(prev)
-                          next.has(i) ? next.delete(i) : next.add(i)
-                          return next
-                        })}
                       >
-                        <input
-                          type="checkbox"
-                          checked={selectedOcr.has(i)}
-                          onChange={() => {}}
-                          className="mt-0.5 h-4 w-4 accent-[#102A43] shrink-0 cursor-pointer"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-[#102A43]">{item.productName}</p>
-                          <p className="text-sm text-[#64748B]">数量: {item.quantity}個 | 納期: {item.deliveryDate}</p>
-                          {item.notes && <p className="text-xs text-[#64748B] truncate">{item.notes}</p>}
+                        {/* チェックボックスヘッダー */}
+                        <div
+                          className="flex items-center gap-2 px-3 pt-3 pb-1 cursor-pointer"
+                          onClick={() => setSelectedOcr(prev => {
+                            const next = new Set(prev)
+                            next.has(i) ? next.delete(i) : next.add(i)
+                            return next
+                          })}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedOcr.has(i)}
+                            onChange={() => {}}
+                            className="h-4 w-4 accent-[#102A43] shrink-0 cursor-pointer"
+                          />
+                          <span className="text-xs text-[#64748B]">#{i + 1} — チェックを外すとスキップ</span>
+                        </div>
+                        {/* 編集フォーム */}
+                        <div className="grid grid-cols-2 gap-2 px-3 pb-3" onClick={e => e.stopPropagation()}>
+                          <div className="col-span-2 space-y-1">
+                            <label className="text-xs text-[#64748B]">商品名</label>
+                            <Input
+                              value={item.productName}
+                              onChange={e => setOcrPreview(prev => prev.map((it, idx) =>
+                                idx === i ? { ...it, productName: e.target.value } : it
+                              ))}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-[#64748B]">数量</label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={e => setOcrPreview(prev => prev.map((it, idx) =>
+                                idx === i ? { ...it, quantity: parseInt(e.target.value) || 1 } : it
+                              ))}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-[#64748B]">納期</label>
+                            <Input
+                              type="date"
+                              value={item.deliveryDate}
+                              onChange={e => setOcrPreview(prev => prev.map((it, idx) =>
+                                idx === i ? { ...it, deliveryDate: e.target.value } : it
+                              ))}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div className="col-span-2 space-y-1">
+                            <label className="text-xs text-[#64748B]">備考</label>
+                            <Input
+                              value={item.notes ?? ''}
+                              onChange={e => setOcrPreview(prev => prev.map((it, idx) =>
+                                idx === i ? { ...it, notes: e.target.value } : it
+                              ))}
+                              placeholder="なし"
+                              className="h-8 text-sm"
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
