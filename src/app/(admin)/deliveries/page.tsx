@@ -169,6 +169,7 @@ export default function DeliveriesPage() {
   }
 
   const today = new Date(); today.setHours(0,0,0,0)
+  const twoMonthsAgo = new Date(today); twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2)
 
   const filtered = deliveries.filter(d => {
     const term = searchTerm.toLowerCase()
@@ -177,7 +178,7 @@ export default function DeliveriesPage() {
       (d.notes ?? '').toLowerCase().includes(term) ||
       (d.supplierName ?? '').toLowerCase().includes(term)
     const dDate = new Date(d.deliveryDate); dDate.setHours(0,0,0,0)
-    const matchDate = showPast ? true : dDate >= today
+    const matchDate = showPast ? dDate >= twoMonthsAgo : dDate >= today
     return matchSearch && matchDate
   })
 
@@ -222,7 +223,7 @@ export default function DeliveriesPage() {
           }`}
         >
           <Calendar className="h-3.5 w-3.5 inline mr-1" />
-          {showPast ? '全期間表示中' : '今日以降のみ'}
+          {showPast ? '過去2ヶ月表示中' : '今日以降のみ'}
         </button>
         {isAdmin && filtered.length > 0 && (
           <button

@@ -3,8 +3,7 @@ import { useState, useEffect } from 'react'
 import { useAuth, authHeaders } from '@/lib/auth-context'
 import { apiFetch } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Package, Calendar, TrendingUp } from 'lucide-react'
+import { Package, Truck, Download } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Delivery {
@@ -12,25 +11,37 @@ interface Delivery {
   productName: string
   quantity: number
   deliveryDate: string
-  status: string
-  notes?: string
   supplierName?: string
+  notes?: string
+  createdAt: string
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: '未処理',
-  SHIPPED: '出荷済み',
-  DELIVERED: '納品済み',
-  DELAYED: '遅延',
-  CANCELLED: 'キャンセル',
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('ja-JP', {
+    year: 'numeric', month: 'long', day: 'numeric', weekday: 'short',
+  })
 }
 
-const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  PENDING: 'secondary',
-  SHIPPED: 'default',
-  DELIVERED: 'outline',
-  DELAYED: 'destructive',
-  CANCELLED: 'secondary',
+function DeliveryList({ items, empty }: { items: Delivery[]; empty: string }) {
+  if (items.length === 0) {
+    return <p className="text-[#64748B] text-center py-6 text-sm">{empty}</p>
+  }
+  return (
+    <div className="space-y-2">
+      {items.map(d => (
+        <div key={d.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-[#102A43] truncate">{d.productName}</p>
+            <p className="text-sm text-[#64748B]">
+              {d.quantity}個
+              {d.supplierName && <span className="ml-2">取引先: {d.supplierName}</span>}
+            </p>
+            {d.notes && <p className="text-xs text-[#64748B] truncate mt-0.5">{d.notes}</p>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default function DashboardPage() {
@@ -45,19 +56,22 @@ export default function DashboardPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  const upcoming = deliveries.filter(d => {
-    const date = new Date(d.deliveryDate)
-    date.setHours(0, 0, 0, 0)
-    return date >= today && d.status !== 'DELIVERED' && d.status !== 'CANCELLED'
-  })
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
 
   const todayDeliveries = deliveries.filter(d => {
-    const date = new Date(d.deliveryDate)
-    date.setHours(0, 0, 0, 0)
+    const date = new Date(d.deliveryDate); date.setHours(0, 0, 0, 0)
     return date.getTime() === today.getTime()
+  })
+
+  const yesterdayDeliveries = deliveries.filter(d => {
+    const date = new Date(d.deliveryDate); date.setHours(0, 0, 0, 0)
+    return date.getTime() === yesterday.getTime()
+  })
+
+  const todayImports = deliveries.filter(d => {
+    return new Date(d.createdAt) >= todayStart
   })
 
   if (loading) {
@@ -69,7 +83,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-[#102A43]">
           ようこそ、{user?.name || user?.email} さん
@@ -79,69 +93,45 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#64748B]">総件数</CardTitle>
-            <Package className="h-4 w-4 text-[#64748B]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#102A43]">{deliveries.length}</div>
-            <p className="text-xs text-[#64748B] mt-1">全期間</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#64748B]">本日の納期</CardTitle>
-            <Calendar className="h-4 w-4 text-[#64748B]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#102A43]">{todayDeliveries.length}</div>
-            <p className="text-xs text-[#64748B] mt-1">今日</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#64748B]">今後の予定</CardTitle>
-            <TrendingUp className="h-4 w-4 text-[#64748B]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#102A43]">{upcoming.length}</div>
-            <p className="text-xs text-[#64748B] mt-1">件</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 今後の入荷予定（全件） */}
+      {/* 本日納品商品 */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-[#102A43]">今後の入荷予定</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-[#102A43]">
+            <Truck className="h-5 w-5 text-orange-500" />
+            本日納品商品
+            <span className="ml-auto text-sm font-normal text-[#64748B]">{todayDeliveries.length}件</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {upcoming.length === 0 ? (
-            <p className="text-[#64748B] text-center py-8">入荷予定がありません</p>
-          ) : (
-            <div className="space-y-2">
-              {upcoming.map(d => (
-                <div key={d.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-[#102A43] truncate">{d.productName}</p>
-                    <p className="text-sm text-[#64748B]">
-                      {new Date(d.deliveryDate).toLocaleDateString('ja-JP')} | {d.quantity}個
-                      {d.supplierName && <span className="ml-2 text-xs">取引先: {d.supplierName}</span>}
-                    </p>
-                    {d.notes && <p className="text-xs text-[#64748B] mt-0.5 truncate">{d.notes}</p>}
-                  </div>
-                  <Badge variant={STATUS_VARIANT[d.status] ?? 'secondary'} className="ml-3 shrink-0">
-                    {STATUS_LABEL[d.status] ?? d.status}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
+          <DeliveryList items={todayDeliveries} empty="本日の納品予定はありません" />
+        </CardContent>
+      </Card>
+
+      {/* 昨日納品商品 */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-[#102A43]">
+            <Package className="h-5 w-5 text-[#64748B]" />
+            昨日納品商品
+            <span className="ml-auto text-sm font-normal text-[#64748B]">{yesterdayDeliveries.length}件</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DeliveryList items={yesterdayDeliveries} empty="昨日の納品データはありません" />
+        </CardContent>
+      </Card>
+
+      {/* 本日の取り込み */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-[#102A43]">
+            <Download className="h-5 w-5 text-blue-500" />
+            本日の取り込み
+            <span className="ml-auto text-sm font-normal text-[#64748B]">{todayImports.length}件</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DeliveryList items={todayImports} empty="本日取り込んだデータはありません" />
         </CardContent>
       </Card>
     </div>
