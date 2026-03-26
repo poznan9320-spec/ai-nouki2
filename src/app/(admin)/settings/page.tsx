@@ -16,9 +16,15 @@ import {
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
-import { Building2, Users, Shield, Copy, Trash2, Plus, Truck, QrCode, Check, X } from 'lucide-react'
+import { Building2, Users, Shield, Copy, Trash2, Plus, Truck, QrCode, Check, X, Bell } from 'lucide-react'
 import { toast } from 'sonner'
 import QRCode from 'react-qr-code'
+
+interface NotificationSettings {
+  todayHour: number
+  tomorrowHour: number
+  enabled: boolean
+}
 
 interface CompanyInfo {
   company_id: string
@@ -44,6 +50,10 @@ export default function SettingsPage() {
   const [deletingAll, setDeletingAll] = useState(false)
   const [deletingPast, setDeletingPast] = useState(false)
 
+  // 通知設定
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings>({ todayHour: 7, tomorrowHour: 18, enabled: true })
+  const [savingNotif, setSavingNotif] = useState(false)
+
   // 取引先管理
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([])
   const [newSupplier, setNewSupplier] = useState('')
@@ -52,8 +62,12 @@ export default function SettingsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const companyData = await apiFetch<CompanyInfo>('/api/mobile/company', { headers: authHeaders() })
+      const [companyData, notifData] = await Promise.all([
+        apiFetch<CompanyInfo>('/api/mobile/company', { headers: authHeaders() }),
+        apiFetch<NotificationSettings>('/api/mobile/notification-settings', { headers: authHeaders() }),
+      ])
       setCompany(companyData)
+      setNotifSettings(notifData)
       if (isAdmin) {
         const [usersData, suppliersData] = await Promise.all([
           apiFetch<UserInfo[]>('/api/mobile/users', { headers: authHeaders() }),
@@ -68,6 +82,23 @@ export default function SettingsPage() {
       setLoading(false)
     }
   }, [isAdmin])
+
+  const handleSaveNotif = async () => {
+    setSavingNotif(true)
+    try {
+      const updated = await apiFetch<NotificationSettings>('/api/mobile/notification-settings', {
+        method: 'PUT',
+        body: notifSettings,
+        headers: authHeaders(),
+      })
+      setNotifSettings(updated)
+      toast.success('通知設定を保存しました')
+    } catch {
+      toast.error('保存に失敗しました')
+    } finally {
+      setSavingNotif(false)
+    }
+  }
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -266,6 +297,91 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* 通知設定 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            通知設定
+          </CardTitle>
+          <CardDescription>納品通知を受け取る時刻を設定します</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-[#102A43]">通知を有効にする</p>
+              <p className="text-xs text-[#64748B]">納品リマインダーをオン／オフ</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNotifSettings(s => ({ ...s, enabled: !s.enabled }))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                notifSettings.enabled ? 'bg-[#102A43]' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  notifSettings.enabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {notifSettings.enabled && (
+            <>
+              <Separator />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium text-[#102A43]">本日納品の通知時刻</p>
+                  <Select
+                    value={String(notifSettings.todayHour)}
+                    onValueChange={v => setNotifSettings(s => ({ ...s, todayHour: Number(v) }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <SelectItem key={i} value={String(i)}>
+                          {String(i).padStart(2, '0')}:00
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium text-[#102A43]">明日納品の通知時刻</p>
+                  <Select
+                    value={String(notifSettings.tomorrowHour)}
+                    onValueChange={v => setNotifSettings(s => ({ ...s, tomorrowHour: Number(v) }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <SelectItem key={i} value={String(i)}>
+                          {String(i).padStart(2, '0')}:00
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </>
+          )}
+
+          <Button
+            onClick={handleSaveNotif}
+            disabled={savingNotif}
+            className="w-full bg-[#102A43] hover:bg-[#1a3a5c]"
+            size="sm"
+          >
+            {savingNotif ? '保存中...' : '保存'}
+          </Button>
         </CardContent>
       </Card>
 

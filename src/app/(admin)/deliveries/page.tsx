@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Pencil, Trash2, Search, Building2, Calendar, FileImage } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Building2, FileImage } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Delivery {
@@ -59,7 +59,7 @@ export default function DeliveriesPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [showPast, setShowPast] = useState(false)
+  const [dateFilter, setDateFilter] = useState<'today' | 'tomorrow' | 'week' | 'all' | 'past'>('today')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Delivery | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -170,6 +170,8 @@ export default function DeliveriesPage() {
   }
 
   const today = new Date(); today.setHours(0,0,0,0)
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1)
+  const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7)
   const twoMonthsAgo = new Date(today); twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2)
 
   const filtered = deliveries.filter(d => {
@@ -179,7 +181,12 @@ export default function DeliveriesPage() {
       (d.notes ?? '').toLowerCase().includes(term) ||
       (d.supplierName ?? '').toLowerCase().includes(term)
     const dDate = new Date(d.deliveryDate); dDate.setHours(0,0,0,0)
-    const matchDate = showPast ? dDate >= twoMonthsAgo : dDate >= today
+    let matchDate = true
+    if (dateFilter === 'today') matchDate = dDate.getTime() === today.getTime()
+    else if (dateFilter === 'tomorrow') matchDate = dDate.getTime() === tomorrow.getTime()
+    else if (dateFilter === 'week') matchDate = dDate >= today && dDate <= weekEnd
+    else if (dateFilter === 'all') matchDate = dDate >= today
+    else if (dateFilter === 'past') matchDate = dDate >= twoMonthsAgo && dDate < today
     return matchSearch && matchDate
   })
 
@@ -215,21 +222,29 @@ export default function DeliveriesPage() {
         />
       </div>
 
-      {/* 過去データ表示切替 + 全選択 */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => { setShowPast(v => !v); setSelectedIds(new Set()) }}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-            showPast ? 'bg-[#102A43] text-white' : 'bg-gray-100 text-[#64748B] hover:bg-gray-200'
-          }`}
-        >
-          <Calendar className="h-3.5 w-3.5 inline mr-1" />
-          {showPast ? '過去2ヶ月表示中' : '今日以降のみ'}
-        </button>
+      {/* 日付フィルター */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+        {([
+          { key: 'today', label: '今日' },
+          { key: 'tomorrow', label: '明日' },
+          { key: 'week', label: '今週' },
+          { key: 'all', label: '全期間' },
+          { key: 'past', label: '過去' },
+        ] as { key: 'today' | 'tomorrow' | 'week' | 'all' | 'past'; label: string }[]).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => { setDateFilter(key); setSelectedIds(new Set()) }}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+              dateFilter === key ? 'bg-[#102A43] text-white' : 'bg-gray-100 text-[#64748B] hover:bg-gray-200'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
         {isAdmin && filtered.length > 0 && (
           <button
             onClick={() => setSelectedIds(allSelected ? new Set() : new Set(filtered.map(d => d.id)))}
-            className="ml-auto px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-[#64748B] hover:bg-gray-200"
+            className="ml-auto px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-[#64748B] hover:bg-gray-200 whitespace-nowrap shrink-0"
           >
             {allSelected ? '全選択解除' : '全選択'}
           </button>

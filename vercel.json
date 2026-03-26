@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/notify-deliveries",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

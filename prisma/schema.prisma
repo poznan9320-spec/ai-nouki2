@@ -37,7 +37,8 @@ model User {
   company      Company        @relation(fields: [companyId], references: [id])
   messages     Message[]
   orderRequests OrderRequest[]
-  notifications Notification[]
+  notifications        Notification[]
+  notificationSetting  NotificationSetting?
 }
 
 model Delivery {
@@ -90,6 +91,17 @@ model Notification {
   isRead    Boolean          @default(false)
   createdAt DateTime         @default(now())
   user      User             @relation(fields: [userId], references: [id])
+}
+
+model NotificationSetting {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  todayHour        Int      @default(7)
+  tomorrowHour     Int      @default(18)
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum Role {
