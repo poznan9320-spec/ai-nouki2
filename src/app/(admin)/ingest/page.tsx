@@ -318,11 +318,11 @@ export default function IngestPage() {
                   ) : (
                     <div className="text-[#64748B]">
                       <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">クリックして画像を選択</p>
-                      <p className="text-xs mt-1">PNG, JPG 対応</p>
+                      <p className="text-sm">クリックしてファイルを選択</p>
+                      <p className="text-xs mt-1">PNG, JPG, PDF 対応</p>
                     </div>
                   )}
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                  <input ref={fileInputRef} type="file" accept="image/*,.pdf,application/pdf" className="hidden"
                     onChange={e => setOcrFile(e.target.files?.[0] ?? null)} />
                 </div>
               </div>

@@ -53,7 +53,17 @@ export async function POST(req: NextRequest) {
     if (file) {
       const bytes = await file.arrayBuffer()
       const base64 = Buffer.from(bytes).toString('base64')
-      const mediaType = (file.type || 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+
+      type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+      type MessageContent =
+        | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string } }
+        | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+        | { type: 'text'; text: string }
+
+      const fileContent: MessageContent = isPdf
+        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
+        : { type: 'image', source: { type: 'base64', media_type: (file.type || 'image/jpeg') as ImageMediaType, data: base64 } }
 
       const response = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
@@ -62,8 +72,8 @@ export async function POST(req: NextRequest) {
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-            { type: 'text', text: 'この画像から納期・配送情報を抽出してください。' },
+            fileContent,
+            { type: 'text', text: 'このファイルから納期・配送情報を抽出してください。' },
           ],
         }],
       })
