@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { authHeaders } from '@/lib/auth-context'
+import { useAuth, authHeaders } from '@/lib/auth-context'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -26,6 +27,15 @@ interface CsvResult {
 }
 
 export default function IngestPage() {
+  const { isAdmin } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (isAdmin === false) router.replace('/dashboard')
+  }, [isAdmin, router])
+
+  if (!isAdmin) return null
+
   // OCR tab
   const [ocrFile, setOcrFile] = useState<File | null>(null)
   const [ocrText, setOcrText] = useState('')

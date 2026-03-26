@@ -20,18 +20,19 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 
-const navItems = [
-  { href: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
-  { href: '/deliveries', label: '入荷管理', icon: Package },
-  { href: '/ingest', label: 'データ取込', icon: Upload },
-  { href: '/chat', label: 'AIチャット', icon: MessageSquare },
-  { href: '/calendar', label: 'カレンダー', icon: Calendar },
-  { href: '/notifications', label: '通知', icon: Bell },
-  { href: '/settings', label: '設定', icon: Settings },
+const allNavItems = [
+  { href: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard, adminOnly: false },
+  { href: '/deliveries', label: '納期スケジュール', icon: Package, adminOnly: false },
+  { href: '/ingest', label: 'データ取込', icon: Upload, adminOnly: true },
+  { href: '/chat', label: 'AIチャット', icon: MessageSquare, adminOnly: false },
+  { href: '/calendar', label: 'カレンダー', icon: Calendar, adminOnly: false },
+  { href: '/notifications', label: '通知', icon: Bell, adminOnly: false },
+  { href: '/settings', label: '設定', icon: Settings, adminOnly: false },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, company, logout } = useAuth()
+  const navItems = allNavItems.filter(item => !item.adminOnly || user?.role === 'ADMIN')
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)

@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<UserInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingRole, setUpdatingRole] = useState<string | null>(null)
+  const [deletingUser, setDeletingUser] = useState<string | null>(null)
   const [deletingAll, setDeletingAll] = useState(false)
   const [deletingPast, setDeletingPast] = useState(false)
 
@@ -166,6 +167,20 @@ export default function SettingsPage() {
       toast.error(err instanceof Error ? err.message : '削除に失敗しました')
     } finally {
       setDeletingAll(false)
+    }
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('このメンバーを削除しますか？この操作は取り消せません。')) return
+    setDeletingUser(userId)
+    try {
+      await apiFetch(`/api/mobile/users/${userId}`, { method: 'DELETE', headers: authHeaders() })
+      setUsers(u => u.filter(user => user.user_id !== userId))
+      toast.success('メンバーを削除しました')
+    } catch {
+      toast.error('削除に失敗しました')
+    } finally {
+      setDeletingUser(null)
     }
   }
 
@@ -456,19 +471,30 @@ export default function SettingsPage() {
                         {getRoleLabel(u.role)}
                       </Badge>
                     ) : (
-                      <Select
-                        value={u.role}
-                        onValueChange={val => handleRoleChange(u.user_id, val)}
-                        disabled={updatingRole === u.user_id}
-                      >
-                        <SelectTrigger className="w-28 shrink-0">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ADMIN">管理者</SelectItem>
-                          <SelectItem value="EMPLOYEE">従業員</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Select
+                          value={u.role}
+                          onValueChange={val => handleRoleChange(u.user_id, val)}
+                          disabled={updatingRole === u.user_id}
+                        >
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ADMIN">管理者</SelectItem>
+                            <SelectItem value="EMPLOYEE">従業員</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => handleDeleteUser(u.user_id)}
+                          disabled={deletingUser === u.user_id}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ))
