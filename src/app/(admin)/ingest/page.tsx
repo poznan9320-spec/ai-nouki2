@@ -30,12 +30,6 @@ export default function IngestPage() {
   const { isAdmin } = useAuth()
   const router = useRouter()
 
-  useEffect(() => {
-    if (isAdmin === false) router.replace('/dashboard')
-  }, [isAdmin, router])
-
-  if (!isAdmin) return null
-
   // OCR tab
   const [ocrFile, setOcrFile] = useState<File | null>(null)
   const [ocrText, setOcrText] = useState('')
@@ -59,11 +53,17 @@ export default function IngestPage() {
   const [suppliers, setSuppliers] = useState<string[]>([])
 
   useEffect(() => {
+    if (isAdmin === false) router.replace('/dashboard')
+  }, [isAdmin, router])
+
+  useEffect(() => {
     fetch('/api/mobile/suppliers', { headers: authHeaders() })
       .then(r => r.ok ? r.json() : [])
       .then((data: { name: string }[]) => setSuppliers(data.map(s => s.name)))
       .catch(() => {})
   }, [])
+
+  if (!isAdmin) return null
 
   const handleOcrExtract = async () => {
     if (!ocrFile && !ocrText.trim()) {

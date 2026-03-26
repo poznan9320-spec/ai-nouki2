@@ -32,6 +32,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
   if (user.role !== 'ADMIN') return NextResponse.json({ error: '権限がありません' }, { status: 403 })
   const { id } = await params
-  await prisma.delivery.delete({ where: { id, companyId: user.companyId } })
+  try {
+    await prisma.delivery.delete({ where: { id, companyId: user.companyId } })
+  } catch {
+    return NextResponse.json({ error: 'データが見つかりません' }, { status: 404 })
+  }
   return NextResponse.json({ success: true })
 }
