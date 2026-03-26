@@ -114,6 +114,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error(error)
-    return NextResponse.json({ error: 'OCR処理中にエラーが発生しました' }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ error: `OCR処理中にエラーが発生しました: ${msg}` }, { status: 500 })
   }
 }
