@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useAuth, authHeaders } from '@/lib/auth-context'
 import { apiFetch } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Package, Truck, Download } from 'lucide-react'
+import { Package, Truck, Download, CalendarClock } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Delivery {
@@ -58,11 +58,17 @@ export default function DashboardPage() {
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1)
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
 
   const todayDeliveries = deliveries.filter(d => {
     const date = new Date(d.deliveryDate); date.setHours(0, 0, 0, 0)
     return date.getTime() === today.getTime()
+  })
+
+  const tomorrowDeliveries = deliveries.filter(d => {
+    const date = new Date(d.deliveryDate); date.setHours(0, 0, 0, 0)
+    return date.getTime() === tomorrow.getTime()
   })
 
   const yesterdayDeliveries = deliveries.filter(d => {
@@ -92,6 +98,27 @@ export default function DashboardPage() {
           {today.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
         </p>
       </div>
+
+      {/* 明日納品商品 */}
+      <Card className={tomorrowDeliveries.length > 0 ? 'border-blue-200 bg-blue-50/40' : ''}>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-[#102A43]">
+            <CalendarClock className="h-5 w-5 text-blue-500" />
+            明日納品商品
+            {tomorrowDeliveries.length > 0 && (
+              <span className="ml-1 px-2 py-0.5 text-xs font-bold bg-blue-500 text-white rounded-full">
+                {tomorrowDeliveries.length}件
+              </span>
+            )}
+            {tomorrowDeliveries.length === 0 && (
+              <span className="ml-auto text-sm font-normal text-[#64748B]">0件</span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DeliveryList items={tomorrowDeliveries} empty="明日の納品予定はありません" />
+        </CardContent>
+      </Card>
 
       {/* 本日納品商品 */}
       <Card>
