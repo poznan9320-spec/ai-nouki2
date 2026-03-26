@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 export default function LoginPage() {
   const { user, loading, login, register } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -24,15 +25,25 @@ export default function LoginPage() {
   const [registerLoading, setRegisterLoading] = useState(false)
 
   // 会社参加フォーム
-  const [joinCompanyId, setJoinCompanyId] = useState('')
+  const [joinCode, setJoinCode] = useState('')
   const [joinEmail, setJoinEmail] = useState('')
   const [joinPassword, setJoinPassword] = useState('')
   const [joinName, setJoinName] = useState('')
   const [joinLoading, setJoinLoading] = useState(false)
+  const [joinPending, setJoinPending] = useState(false)
+  const [defaultTab, setDefaultTab] = useState('login')
 
   useEffect(() => {
     if (!loading && user) router.push('/dashboard')
   }, [user, loading, router])
+
+  useEffect(() => {
+    const code = searchParams.get('join')
+    if (code) {
+      setJoinCode(code.toUpperCase())
+      setDefaultTab('join')
+    }
+  }, [searchParams])
 
   if (loading) {
     return (
@@ -67,7 +78,7 @@ export default function LoginPage() {
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!joinCompanyId || !joinEmail || !joinPassword || !joinName) {
+    if (!joinCode || !joinEmail || !joinPassword || !joinName) {
       toast.error('全ての項目を入力してください')
       return
     }
@@ -76,15 +87,11 @@ export default function LoginPage() {
       const res = await fetch('/api/mobile/register-employee', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId: joinCompanyId, email: joinEmail, password: joinPassword, name: joinName }),
+        body: JSON.stringify({ joinCode: joinCode.toUpperCase(), email: joinEmail, password: joinPassword, name: joinName }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || '登録に失敗しました')
-      toast.success('登録完了しました。ログインしてください')
-      setJoinCompanyId('')
-      setJoinEmail('')
-      setJoinPassword('')
-      setJoinName('')
+      setJoinPending(true)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : '登録に失敗しました')
     } finally {
@@ -119,7 +126,7 @@ export default function LoginPage() {
           <p className="text-[#64748B] mt-2">B2B配送・納期管理システム</p>
         </div>
 
-        <Tabs defaultValue="login" className="w-full">
+        <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="login">ログイン</TabsTrigger>
             <TabsTrigger value="join">会社に参加</TabsTrigger>
@@ -172,17 +179,30 @@ export default function LoginPage() {
             <Card>
               <CardHeader>
                 <CardTitle>会社に参加</CardTitle>
-                <CardDescription>管理者から会社IDを受け取って登録してください</CardDescription>
+                <CardDescription>管理者から招待コードまたはQRコードを受け取って登録してください</CardDescription>
               </CardHeader>
               <CardContent>
+                {joinPending ? (
+                  <div className="text-center py-6 space-y-3">
+                    <div className="w-14 h-14 bg-yellow-100 rounded-full flex items-center justify-center mx-auto">
+                      <svg className="w-7 h-7 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <p className="font-semibold text-[#102A43]">申請が完了しました</p>
+                    <p className="text-sm text-[#64748B]">管理者が承認すると<br />ログインできるようになります</p>
+                  </div>
+                ) : (
                 <form onSubmit={handleJoin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="join-company-id">会社ID</Label>
+                    <Label htmlFor="join-code">招待コード</Label>
                     <Input
-                      id="join-company-id"
-                      placeholder="管理者から受け取った会社ID"
-                      value={joinCompanyId}
-                      onChange={e => setJoinCompanyId(e.target.value)}
+                      id="join-code"
+                      placeholder="例: 12345AB"
+                      value={joinCode}
+                      onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                      className="font-mono text-lg tracking-widest text-center"
+                      maxLength={7}
                       required
                     />
                   </div>
@@ -223,9 +243,10 @@ export default function LoginPage() {
                     className="w-full bg-[#102A43] hover:bg-[#1a3a5c]"
                     disabled={joinLoading}
                   >
-                    {joinLoading ? '登録中...' : '参加する'}
+                    {joinLoading ? '登録中...' : '参加申請する'}
                   </Button>
                 </form>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

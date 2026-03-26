@@ -10,6 +10,6 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'asc' }
   })
   return NextResponse.json(users.map(u => ({
-    user_id: u.id, name: u.name, email: u.email, role: u.role, created_at: u.createdAt
+    user_id: u.id, name: u.name, email: u.email, role: u.role, status: u.status, created_at: u.createdAt
   })))
 }

@@ -25,6 +25,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'メールアドレスまたはパスワードが正しくありません' }, { status: 401 })
     }
 
+    if (user.status === 'PENDING') {
+      return NextResponse.json({ error: '管理者の承認待ちです。承認後にログインできます。', pending: true }, { status: 403 })
+    }
+    if (user.status === 'REJECTED') {
+      return NextResponse.json({ error: 'アカウントが拒否されました。管理者にお問い合わせください。' }, { status: 403 })
+    }
+
     const token = signToken({
       userId: user.id,
       email: user.email,

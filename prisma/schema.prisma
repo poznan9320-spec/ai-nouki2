@@ -10,6 +10,7 @@ datasource db {
 model Company {
   id        String     @id @default(cuid())
   name      String
+  joinCode  String     @unique
   createdAt DateTime   @default(now())
   users     User[]
   deliveries Delivery[]
@@ -30,6 +31,7 @@ model User {
   password     String?
   name         String?
   role         Role           @default(EMPLOYEE)
+  status       UserStatus     @default(PENDING)
   companyId    String
   createdAt    DateTime       @default(now())
   company      Company        @relation(fields: [companyId], references: [id])
@@ -93,6 +95,12 @@ model Notification {
 enum Role {
   ADMIN
   EMPLOYEE
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  REJECTED
 }
 
 enum DeliveryStatus {

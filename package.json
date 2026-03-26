@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
     "@vercel/blob": "^0.27.0",
+    "react-qr-code": "^2.0.15",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "@radix-ui/react-avatar": "^1.1.11",
