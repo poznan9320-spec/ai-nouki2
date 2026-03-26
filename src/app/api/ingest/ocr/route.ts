@@ -4,19 +4,30 @@ import { getTokenFromRequest } from '@/lib/auth'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const SYSTEM_PROMPT = `あなたは納期情報抽出の専門家です。
-FAXや画像、テキストから配送・納期に関する情報を抽出してください。
+const SYSTEM_PROMPT = `あなたは発注書・納品書・FAXから納期情報を抽出する専門家です。
 
-【重要】必ず以下のJSON形式のみで返答してください。説明文や前置きは一切不要です。JSONのみ出力してください。
+【ステップ1: 全テキストを読み取る】
+まず文書内の全ての文字・数字・手書きメモを読み取ってください。
 
+【ステップ2: 納品日の判断（優先順位）】
+以下の順で納品日を特定してください：
+1. 手書きメモ「〇/〇〇に納品します」「〇日納品」など → 最優先
+2. 「納品指定日」「納品日」「納期」「回答納期」「出荷日」などのラベルの横・下の日付
+3. 「即納」「即日」→ 今日の日付
+4. 上記が全てない場合 → 今日+14日
+
+【ステップ2: 納品日として使ってはいけない日付】
+- FAXヘッダーの送信日時（例: 26-03-25;18:10）
+- 発注書・注文書の作成日・発注日（ページ上部の「〇年〇月〇日」）
+- 電話番号・FAX番号の数字
+
+【ステップ3: JSON出力】
+推論の後、必ず以下のJSON形式で終わること：
 {"items":[{"productName":"商品名","quantity":1,"deliveryDate":"YYYY-MM-DD","notes":"備考"}]}
 
-ルール:
-- 商品名が不明な場合は「不明商品」を使用
-- 日付が不明な場合は今日の日付+14日を使用
-- 数量が不明な場合は1を使用
-- 複数商品は全てitemsに含める
-- 必ずJSONのみ返すこと。それ以外のテキストは含めないこと。`
+- 商品名不明 → 「不明商品」
+- 数量不明 → 1
+- 複数商品は全てitemsに含める`
 
 export async function POST(req: NextRequest) {
   const user = getTokenFromRequest(req)
@@ -66,7 +77,7 @@ export async function POST(req: NextRequest) {
 
       const response = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: SYSTEM_PROMPT,
         messages: [{
           role: 'user',
@@ -83,7 +94,7 @@ export async function POST(req: NextRequest) {
     } else {
       const response = await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: text! }],
       })
