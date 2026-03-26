@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { prisma } from '@/lib/prisma'
 import { getTokenFromRequest } from '@/lib/auth'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -98,23 +97,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '納期情報を抽出できませんでした' }, { status: 400 })
     }
 
-    const deliveries = await prisma.delivery.createMany({
-      data: extractedData.items.map((item) => ({
-        productName: item.productName,
-        quantity: item.quantity,
-        deliveryDate: new Date(item.deliveryDate),
-        status: 'PENDING' as const,
-        sourceType: file ? 'IMAGE' as const : 'TEXT' as const,
-        notes: item.notes || null,
-        supplierName,
-        companyId: user.companyId,
-      })),
-    })
-
+    // DB保存はしない。フロントエンドで確認後に /api/ingest/save へ送る
     return NextResponse.json({
-      message: `${deliveries.count}件の配送データを登録しました`,
-      imported: deliveries.count,
       items: extractedData.items,
+      sourceType: file ? 'IMAGE' : 'TEXT',
+      supplierName,
     })
   } catch (error) {
     console.error(error)

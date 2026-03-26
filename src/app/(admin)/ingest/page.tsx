@@ -30,7 +30,11 @@ export default function IngestPage() {
   const [ocrFile, setOcrFile] = useState<File | null>(null)
   const [ocrText, setOcrText] = useState('')
   const [ocrLoading, setOcrLoading] = useState(false)
-  const [ocrResults, setOcrResults] = useState<ImportedItem[]>([])
+  const [ocrPreview, setOcrPreview] = useState<ImportedItem[]>([])
+  const [ocrSourceType, setOcrSourceType] = useState<'IMAGE' | 'TEXT'>('TEXT')
+  const [selectedOcr, setSelectedOcr] = useState<Set<number>>(new Set())
+  const [ocrSaving, setOcrSaving] = useState(false)
+  const [ocrSaved, setOcrSaved] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // CSV tab
@@ -50,13 +54,14 @@ export default function IngestPage() {
       .catch(() => {})
   }, [])
 
-  const handleOcrSubmit = async () => {
+  const handleOcrExtract = async () => {
     if (!ocrFile && !ocrText.trim()) {
-      toast.error('画像またはテキストを入力してください')
+      toast.error('ファイルまたはテキストを入力してください')
       return
     }
     setOcrLoading(true)
-    setOcrResults([])
+    setOcrPreview([])
+    setOcrSaved(false)
     try {
       const formData = new FormData()
       if (ocrFile) formData.append('file', ocrFile)
@@ -71,12 +76,36 @@ export default function IngestPage() {
       if (!res.ok) throw new Error(data?.error || 'OCR処理に失敗しました')
 
       const items: ImportedItem[] = data.items ?? []
-      setOcrResults(items)
-      toast.success(`${items.length}件のデータをDBに登録しました`)
+      setOcrPreview(items)
+      setOcrSourceType(data.sourceType ?? 'TEXT')
+      setSelectedOcr(new Set(items.map((_, i) => i)))
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'OCR処理に失敗しました')
     } finally {
       setOcrLoading(false)
+    }
+  }
+
+  const handleOcrSave = async () => {
+    const items = ocrPreview.filter((_, i) => selectedOcr.has(i))
+    if (!items.length) { toast.error('登録するアイテムを選択してください'); return }
+    setOcrSaving(true)
+    try {
+      const res = await fetch('/api/ingest/save', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, supplierName: supplierName.trim() || null, sourceType: ocrSourceType }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || '登録に失敗しました')
+      toast.success(`${data.imported}件を登録しました`)
+      setOcrSaved(true)
+      setOcrPreview([])
+      setSelectedOcr(new Set())
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : '登録に失敗しました')
+    } finally {
+      setOcrSaving(false)
     }
   }
 
@@ -337,30 +366,68 @@ export default function IngestPage() {
                 />
               </div>
 
-              <Button onClick={handleOcrSubmit} disabled={ocrLoading} className="w-full bg-[#102A43] hover:bg-[#1a3a5c]">
-                {ocrLoading ? '解析中...' : 'AIで解析・登録する'}
+              <Button onClick={handleOcrExtract} disabled={ocrLoading} className="w-full bg-[#102A43] hover:bg-[#1a3a5c]">
+                {ocrLoading ? '解析中...' : 'AIで解析する'}
               </Button>
 
-              {ocrResults.length > 0 && (
-                <div className="mt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Check className="h-4 w-4 text-green-600" />
-                    <h3 className="font-semibold text-[#102A43]">登録済み ({ocrResults.length}件)</h3>
+              {ocrSaved && (
+                <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <Check className="h-4 w-4 text-green-600" />
+                  <p className="text-sm font-medium text-green-800">登録が完了しました</p>
+                </div>
+              )}
+
+              {ocrPreview.length > 0 && (
+                <div className="mt-2 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-[#102A43]">
+                      抽出結果（{ocrPreview.length}件）— 登録するものにチェックを入れてください
+                    </p>
+                    <button
+                      className="text-xs text-[#64748B] underline"
+                      onClick={() => setSelectedOcr(
+                        selectedOcr.size === ocrPreview.length
+                          ? new Set()
+                          : new Set(ocrPreview.map((_, i) => i))
+                      )}
+                    >
+                      {selectedOcr.size === ocrPreview.length ? '全解除' : '全選択'}
+                    </button>
                   </div>
                   <div className="space-y-2">
-                    {ocrResults.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                        <div>
+                    {ocrPreview.map((item, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedOcr.has(i) ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200 opacity-50'
+                        }`}
+                        onClick={() => setSelectedOcr(prev => {
+                          const next = new Set(prev)
+                          next.has(i) ? next.delete(i) : next.add(i)
+                          return next
+                        })}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedOcr.has(i)}
+                          onChange={() => {}}
+                          className="mt-0.5 h-4 w-4 accent-[#102A43] shrink-0 cursor-pointer"
+                        />
+                        <div className="flex-1 min-w-0">
                           <p className="font-medium text-[#102A43]">{item.productName}</p>
                           <p className="text-sm text-[#64748B]">数量: {item.quantity}個 | 納期: {item.deliveryDate}</p>
-                          {item.notes && <p className="text-xs text-[#64748B]">{item.notes}</p>}
+                          {item.notes && <p className="text-xs text-[#64748B] truncate">{item.notes}</p>}
                         </div>
-                        <Badge variant="outline" className="text-green-600 border-green-300 shrink-0">
-                          <Check className="h-3 w-3 mr-1" />登録済
-                        </Badge>
                       </div>
                     ))}
                   </div>
+                  <Button
+                    onClick={handleOcrSave}
+                    disabled={ocrSaving || selectedOcr.size === 0}
+                    className="w-full bg-[#102A43] hover:bg-[#1a3a5c]"
+                  >
+                    {ocrSaving ? '登録中...' : `選択した${selectedOcr.size}件を登録する`}
+                  </Button>
                 </div>
               )}
             </CardContent>
