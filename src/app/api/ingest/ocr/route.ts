@@ -7,22 +7,17 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const SYSTEM_PROMPT = `あなたは納期情報抽出の専門家です。
 FAXや画像、テキストから配送・納期に関する情報を抽出してください。
-以下のJSON形式で返答してください（余計な説明は不要）:
 
-{
-  "items": [
-    {
-      "productName": "商品名",
-      "quantity": 数量（数値）,
-      "deliveryDate": "YYYY-MM-DD形式の日付",
-      "notes": "備考（あれば）"
-    }
-  ]
-}
+【重要】必ず以下のJSON形式のみで返答してください。説明文や前置きは一切不要です。JSONのみ出力してください。
 
-複数の商品がある場合はitemsの配列に全て含めてください。
-日付が明確でない場合は今日の日付+14日を使用してください。
-数量が不明な場合は1を使用してください。`
+{"items":[{"productName":"商品名","quantity":1,"deliveryDate":"YYYY-MM-DD","notes":"備考"}]}
+
+ルール:
+- 商品名が不明な場合は「不明商品」を使用
+- 日付が不明な場合は今日の日付+14日を使用
+- 数量が不明な場合は1を使用
+- 複数商品は全てitemsに含める
+- 必ずJSONのみ返すこと。それ以外のテキストは含めないこと。`
 
 export async function POST(req: NextRequest) {
   const user = getTokenFromRequest(req)
@@ -47,10 +42,9 @@ export async function POST(req: NextRequest) {
     type ExtractedData = { items: ExtractedItem[] }
 
     function parseJson(raw: string): ExtractedData {
-      // マークダウンコードブロックを除去してからパース
       const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
       const match = cleaned.match(/\{[\s\S]*\}/)
-      if (!match) throw new Error('JSONが見つかりません')
+      if (!match) throw new Error(`JSONが見つかりません。モデルの返答: ${cleaned.slice(0, 200)}`)
       return JSON.parse(match[0]) as ExtractedData
     }
 
