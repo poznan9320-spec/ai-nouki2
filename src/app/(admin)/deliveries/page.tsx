@@ -69,6 +69,7 @@ export default function DeliveriesPage() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [suppliers, setSuppliers] = useState<string[]>([])
+  const [supplierFilter, setSupplierFilter] = useState<string | null>(null)
 
   useEffect(() => {
     fetchDeliveries()
@@ -174,20 +175,25 @@ export default function DeliveriesPage() {
   const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7)
   const twoMonthsAgo = new Date(today); twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2)
 
-  const filtered = deliveries.filter(d => {
+  // 日付フィルター後のデータから取引先一覧を生成
+  const dateFiltered = deliveries.filter(d => {
+    const dDate = new Date(d.deliveryDate); dDate.setHours(0,0,0,0)
+    if (dateFilter === 'today') return dDate.getTime() === today.getTime()
+    if (dateFilter === 'tomorrow') return dDate.getTime() === tomorrow.getTime()
+    if (dateFilter === 'week') return dDate >= today && dDate <= weekEnd
+    if (dateFilter === 'past') return dDate >= twoMonthsAgo && dDate < today
+    return dDate >= today
+  })
+  const availableSuppliers = Array.from(new Set(dateFiltered.map(d => d.supplierName).filter(Boolean) as string[])).sort()
+
+  const filtered = dateFiltered.filter(d => {
     const term = searchTerm.toLowerCase()
     const matchSearch = !term ||
       d.productName.toLowerCase().includes(term) ||
       (d.notes ?? '').toLowerCase().includes(term) ||
       (d.supplierName ?? '').toLowerCase().includes(term)
-    const dDate = new Date(d.deliveryDate); dDate.setHours(0,0,0,0)
-    let matchDate = true
-    if (dateFilter === 'today') matchDate = dDate.getTime() === today.getTime()
-    else if (dateFilter === 'tomorrow') matchDate = dDate.getTime() === tomorrow.getTime()
-    else if (dateFilter === 'week') matchDate = dDate >= today && dDate <= weekEnd
-    else if (dateFilter === 'all') matchDate = dDate >= today
-    else if (dateFilter === 'past') matchDate = dDate >= twoMonthsAgo && dDate < today
-    return matchSearch && matchDate
+    const matchSupplier = !supplierFilter || d.supplierName === supplierFilter
+    return matchSearch && matchSupplier
   })
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
@@ -233,7 +239,7 @@ export default function DeliveriesPage() {
         ] as { key: 'today' | 'tomorrow' | 'week' | 'all' | 'past'; label: string }[]).map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => { setDateFilter(key); setSelectedIds(new Set()) }}
+            onClick={() => { setDateFilter(key); setSupplierFilter(null); setSelectedIds(new Set()) }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               dateFilter === key ? 'bg-[#102A43] text-white' : 'bg-gray-100 text-[#64748B] hover:bg-gray-200'
             }`}
@@ -250,6 +256,31 @@ export default function DeliveriesPage() {
           </button>
         )}
       </div>
+
+      {/* 取引先フィルター */}
+      {availableSuppliers.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          <button
+            onClick={() => { setSupplierFilter(null); setSelectedIds(new Set()) }}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+              supplierFilter === null ? 'bg-[#1E5A9A] text-white' : 'bg-gray-100 text-[#64748B] hover:bg-gray-200'
+            }`}
+          >
+            すべて
+          </button>
+          {availableSuppliers.map(s => (
+            <button
+              key={s}
+              onClick={() => { setSupplierFilter(s); setSelectedIds(new Set()) }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                supplierFilter === s ? 'bg-[#1E5A9A] text-white' : 'bg-gray-100 text-[#64748B] hover:bg-gray-200'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
