@@ -15,13 +15,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Plus, Pencil, Trash2, Search, Building2, FileImage } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -30,25 +23,15 @@ interface Delivery {
   productName: string
   quantity: number
   deliveryDate: string
-  status: string
   notes?: string
   supplierName?: string
   sourceUrl?: string
-}
-
-const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  PENDING:   { label: '入荷待ち',   bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-l-amber-400' },
-  SHIPPED:   { label: '出荷済',     bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-l-blue-400' },
-  DELIVERED: { label: '入荷済',     bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-l-green-500' },
-  DELAYED:   { label: '遅延',       bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-l-red-500' },
-  CANCELLED: { label: 'キャンセル', bg: 'bg-gray-50',   text: 'text-gray-500',   border: 'border-l-gray-400' },
 }
 
 const emptyForm = {
   productName: '',
   quantity: '',
   deliveryDate: '',
-  status: 'PENDING',
   notes: '',
   supplierName: '',
 }
@@ -87,7 +70,6 @@ export default function DeliveriesPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [suppliers, setSuppliers] = useState<string[]>([])
   const [supplierFilter, setSupplierFilter] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<string | null>(null)
 
   useEffect(() => {
     fetchDeliveries()
@@ -116,7 +98,6 @@ export default function DeliveriesPage() {
       productName: d.productName,
       quantity: String(d.quantity),
       deliveryDate: d.deliveryDate.split('T')[0],
-      status: d.status ?? 'PENDING',
       notes: d.notes ?? '',
       supplierName: d.supplierName ?? '',
     })
@@ -133,7 +114,6 @@ export default function DeliveriesPage() {
         productName: form.productName,
         quantity: parseInt(form.quantity),
         deliveryDate: form.deliveryDate,
-        status: form.status,
         notes: form.notes || null,
         supplierName: form.supplierName || null,
         sourceType: 'MANUAL',
@@ -204,8 +184,6 @@ export default function DeliveriesPage() {
     return dDate >= today
   })
   const availableSuppliers = Array.from(new Set(dateFiltered.map(d => d.supplierName).filter(Boolean) as string[])).sort()
-  const availableStatuses = Array.from(new Set(dateFiltered.map(d => d.status).filter(Boolean)))
-    .sort((a, b) => Object.keys(STATUS_CONFIG).indexOf(a) - Object.keys(STATUS_CONFIG).indexOf(b))
 
   const filtered = dateFiltered.filter(d => {
     const term = searchTerm.toLowerCase()
@@ -214,8 +192,7 @@ export default function DeliveriesPage() {
       (d.notes ?? '').toLowerCase().includes(term) ||
       (d.supplierName ?? '').toLowerCase().includes(term)
     const matchSupplier = !supplierFilter || d.supplierName === supplierFilter
-    const matchStatus = !statusFilter || d.status === statusFilter
-    return matchSearch && matchSupplier && matchStatus
+    return matchSearch && matchSupplier
   })
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
@@ -261,7 +238,7 @@ export default function DeliveriesPage() {
         ] as { key: 'today' | 'tomorrow' | 'week' | 'all' | 'past'; label: string }[]).map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => { setDateFilter(key); setSupplierFilter(null); setStatusFilter(null); setSelectedIds(new Set()) }}
+            onClick={() => { setDateFilter(key); setSupplierFilter(null); setSelectedIds(new Set()) }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
               dateFilter === key ? 'bg-[#102A43] text-white' : 'bg-gray-100 text-[#64748B] hover:bg-gray-200'
             }`}
@@ -304,34 +281,6 @@ export default function DeliveriesPage() {
         </div>
       )}
 
-      {/* ステータスフィルター */}
-      {availableStatuses.length > 1 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-          <button
-            onClick={() => { setStatusFilter(null); setSelectedIds(new Set()) }}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-              statusFilter === null ? 'bg-[#102A43] text-white' : 'bg-gray-100 text-[#64748B] hover:bg-gray-200'
-            }`}
-          >
-            全ステータス
-          </button>
-          {availableStatuses.map(s => {
-            const cfg = STATUS_CONFIG[s] ?? { label: s, bg: 'bg-gray-50', text: 'text-gray-600', border: '' }
-            return (
-              <button
-                key={s}
-                onClick={() => { setStatusFilter(s); setSelectedIds(new Set()) }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                  statusFilter === s ? `${cfg.bg} ${cfg.text} ring-1 ring-current` : 'bg-gray-100 text-[#64748B] hover:bg-gray-200'
-                }`}
-              >
-                {cfg.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-4 border-[#102A43] border-t-transparent rounded-full animate-spin"></div>
@@ -347,11 +296,10 @@ export default function DeliveriesPage() {
           {filtered.map(d => {
             const label = dateLabel(d.deliveryDate)
             const isPast = new Date(d.deliveryDate).setHours(0,0,0,0) < today.getTime()
-            const statusCfg = STATUS_CONFIG[d.status] ?? { label: d.status, bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-l-gray-400' }
             return (
               <Card
                 key={d.id}
-                className={`transition-all border-l-4 ${statusCfg.border} ${selectedIds.has(d.id) ? 'ring-2 ring-[#102A43] bg-blue-50/30' : 'hover:shadow-sm'} ${isPast ? 'opacity-60' : ''}`}
+                className={`transition-all ${selectedIds.has(d.id) ? 'ring-2 ring-[#102A43] bg-blue-50/30' : 'hover:shadow-sm'} ${isPast ? 'opacity-60' : ''}`}
               >
                 <CardContent className="p-3">
                   <div className="flex items-center gap-3">
@@ -366,9 +314,6 @@ export default function DeliveriesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-[#102A43]">{d.productName}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusCfg.bg} ${statusCfg.text}`}>
-                          {statusCfg.label}
-                        </span>
                         {d.sourceUrl && (
                           <a
                             href={d.sourceUrl}
@@ -446,19 +391,6 @@ export default function DeliveriesPage() {
                 <Label>納期 *</Label>
                 <Input type="date" value={form.deliveryDate} onChange={e => setForm(f => ({ ...f, deliveryDate: e.target.value }))} />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>ステータス</Label>
-              <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(STATUS_CONFIG).map(([key, { label }]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div className="space-y-2">
               <Label>備考</Label>
