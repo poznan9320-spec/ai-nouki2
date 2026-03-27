@@ -3,6 +3,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { put } from '@vercel/blob'
 import { getTokenFromRequest } from '@/lib/auth'
 
+export const maxDuration = 60
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const SYSTEM_PROMPT = `あなたは発注書・納品書・FAXから納期情報を抽出する専門家です。
