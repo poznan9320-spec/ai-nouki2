@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    // 未来の納期データを全件取得（今日以降）、supplierNameは任意
+    // 未来の納期データを取得（今日以降、最大300件）
     const futureDeliveries = await prisma.delivery.findMany({
       where: {
         companyId: user.companyId,
@@ -35,11 +35,11 @@ export async function POST(req: NextRequest) {
         productName: true,
         quantity: true,
         deliveryDate: true,
-        status: true,
         notes: true,
         supplierName: true,
       },
       orderBy: { deliveryDate: 'asc' },
+      take: 300,
     })
 
     // メッセージを正規化してキーワード抽出（2文字以上の単語）
@@ -53,16 +53,16 @@ export async function POST(req: NextRequest) {
       return keywords.some(kw => nameNorm.includes(kw) || kw.includes(nameNorm))
     })
 
-    // 一致あり → そのデータのみ、なし → 直近50件をコンテキストに使用
-    const contextData = matched.length > 0 ? matched : futureDeliveries.slice(0, 50)
+    // 一致あり → そのデータのみ、なし → 全件をコンテキストに使用
+    const contextData = matched.length > 0 ? matched : futureDeliveries
 
     const lines = contextData.map(d =>
-      `- ${d.productName}: ${d.quantity}個, 納期: ${d.deliveryDate.toLocaleDateString('ja-JP')}, ステータス: ${d.status}${d.supplierName ? ', 取引先: ' + d.supplierName : ''}${d.notes ? ', 備考: ' + d.notes : ''}`
+      `- ${d.productName}: ${d.quantity}個, 納期: ${d.deliveryDate.toLocaleDateString('ja-JP')}${d.supplierName ? ', 取引先: ' + d.supplierName : ''}${d.notes ? ', 備考: ' + d.notes : ''}`
     ).join('\n')
 
     const systemPrompt = matched.length > 0
-      ? `あなたは納期管理アシスタントです。ユーザーが問い合わせた商品の未来の納期データを以下に示します。この情報を元に納期・数量を分かりやすく回答してください。\n\n該当データ（${matched.length}件）:\n${lines}`
-      : `あなたは納期管理アシスタントです。直近の入荷予定データ（${contextData.length}件）を以下に示します。ユーザーの質問に答えてください。商品名で質問すると該当商品の納期をお答えできます。\n\n入荷予定データ:\n${lines || 'データなし'}`
+      ? `あなたは納期管理アシスタントです。ユーザーが問い合わせた商品の納期データを以下に示します。この情報を元に納期・数量を分かりやすく回答してください。\n\n該当データ（${matched.length}件）:\n${lines}`
+      : `あなたは納期管理アシスタントです。今日以降の入荷予定データ（${contextData.length}件）を以下に示します。ユーザーの質問に答えてください。商品名で質問すると該当商品の納期をお答えできます。\n\n入荷予定データ:\n${lines || 'データなし'}`
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',

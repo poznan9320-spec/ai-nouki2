@@ -19,7 +19,7 @@ interface AuthContextType {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (companyName: string, email: string, password: string, name: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   isAdmin: boolean
 }
 
@@ -31,12 +31,8 @@ export const useAuth = () => {
   return ctx
 }
 
-const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('token') : null
-const setToken = (t: string) => localStorage.setItem('token', t)
-const removeToken = () => localStorage.removeItem('token')
-
 async function apiFetch(url: string, options: RequestInit = {}) {
-  const res = await fetch(url, options)
+  const res = await fetch(url, { ...options, credentials: 'same-origin' })
   const data = await res.json()
   if (!res.ok) throw new Error(data?.error || `エラー (${res.status})`)
   return data
@@ -48,17 +44,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true)
 
   const checkAuth = useCallback(async () => {
-    const token = getToken()
-    if (!token) { setLoading(false); return }
     try {
-      const data = await apiFetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      // Cookie is sent automatically — no token management needed
+      const data = await apiFetch('/api/auth/me')
       setUser(data.user)
       setCompany(data.company)
     } catch {
-      removeToken()
       setUser(null)
+      setCompany(null)
     } finally {
       setLoading(false)
     }
@@ -72,7 +65,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     })
-    setToken(data.token)
+    // HttpOnly cookie is set by the server
     setUser(data.user)
     setCompany(data.company)
   }
@@ -83,13 +76,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ companyName, email, password, name }),
     })
-    setToken(data.token)
+    // HttpOnly cookie is set by the server
     setUser(data.user)
     setCompany(data.company)
   }
 
-  const logout = () => {
-    removeToken()
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
     setUser(null)
     setCompany(null)
   }
@@ -104,9 +97,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   )
 }
 
+// Kept for API calls that still pass headers explicitly
 export function authHeaders(): Record<string, string> {
-  const token = getToken()
-  const base: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (token) base['Authorization'] = `Bearer ${token}`
-  return base
+  return { 'Content-Type': 'application/json' }
 }
