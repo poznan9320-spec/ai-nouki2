@@ -20,9 +20,18 @@ model Company {
 model Supplier {
   id        String   @id @default(cuid())
   name      String
+  color     String?
   companyId String
   createdAt DateTime @default(now())
   company   Company  @relation(fields: [companyId], references: [id])
+}
+
+model FaxLog {
+  id        String   @id @default(cuid())
+  messageId String   @unique
+  companyId String
+  processed Boolean  @default(true)
+  createdAt DateTime @default(now())
 }
 
 model User {

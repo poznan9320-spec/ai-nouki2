@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
     let fileUrl: string | null = null
     if (file && process.env.BLOB_READ_WRITE_TOKEN) {
       try {
-        const blob = await put(`deliveries/${Date.now()}_${file.name}`, file, { access: 'private' })
+        const blob = await put(`deliveries/${Date.now()}_${file.name}`, file, { access: 'public' })
         fileUrl = blob.url
       } catch (blobErr) {
         console.warn('[OCR] Blob upload skipped:', blobErr instanceof Error ? blobErr.message : blobErr)

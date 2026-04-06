@@ -5,19 +5,55 @@ import { getTokenFromRequest } from '@/lib/auth'
 export async function GET(req: NextRequest) {
   const user = getTokenFromRequest(req)
   if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+
   const { searchParams } = new URL(req.url)
   const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()))
   const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1))
   const start = new Date(year, month - 1, 1)
   const end = new Date(year, month, 0, 23, 59, 59)
-  const deliveries = await prisma.delivery.findMany({
-    where: { companyId: user.companyId, deliveryDate: { gte: start, lte: end } }
-  })
-  const calendar: Record<string, { product_name: string; quantity: number; id: string }[]> = {}
-  deliveries.forEach(d => {
+
+  const [deliveries, suppliers] = await Promise.all([
+    prisma.delivery.findMany({
+      where: { companyId: user.companyId, deliveryDate: { gte: start, lte: end } },
+      orderBy: { deliveryDate: 'asc' },
+    }),
+    prisma.supplier.findMany({
+      where: { companyId: user.companyId },
+    }),
+  ])
+
+  // Build supplier color map by name
+  const supplierColorMap: Record<string, string> = {}
+  for (const s of suppliers) {
+    if (s.color) supplierColorMap[s.name] = s.color
+  }
+
+  type CalendarItem = {
+    id: string
+    product_name: string
+    quantity: number
+    status: string
+    supplier_name: string | null
+    supplier_color: string | null
+    notes: string | null
+    source_type: string
+  }
+
+  const calendar: Record<string, CalendarItem[]> = {}
+  for (const d of deliveries) {
     const key = d.deliveryDate.toISOString().split('T')[0]
     if (!calendar[key]) calendar[key] = []
-    calendar[key].push({ product_name: d.productName, quantity: d.quantity, id: d.id })
-  })
-  return NextResponse.json(calendar)
+    calendar[key].push({
+      id: d.id,
+      product_name: d.productName,
+      quantity: d.quantity,
+      status: d.status,
+      supplier_name: d.supplierName ?? null,
+      supplier_color: d.supplierName ? (supplierColorMap[d.supplierName] ?? null) : null,
+      notes: d.notes ?? null,
+      source_type: d.sourceType,
+    })
+  }
+
+  return NextResponse.json({ calendar, suppliers })
 }

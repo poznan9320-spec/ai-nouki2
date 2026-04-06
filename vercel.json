@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/notify-deliveries",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/fax-poll",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
