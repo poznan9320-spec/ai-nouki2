@@ -19,7 +19,8 @@ import { prisma } from '@/lib/prisma'
 
 export const maxDuration = 300
 
-const FAX_SENDER = 'FromBrotherDevice@brother.com'
+// デフォルトの送信元（GmailTokenに設定がない場合のフォールバック）
+const DEFAULT_FAX_SENDER = 'FromBrotherDevice@brother.com'
 
 function buildOCRSystemPrompt(): string {
   const now = new Date()
@@ -63,7 +64,7 @@ function parseJson(raw: string): { items: Array<{ productName: string; quantity:
 
 async function processCompany(
   companyId: string,
-  gmailToken: { email: string; accessToken: string; refreshToken: string },
+  gmailToken: { email: string; accessToken: string; refreshToken: string; faxSenderEmail: string },
   anthropic: Anthropic,
 ): Promise<{ processed: number; skipped: number; errors: number }> {
   let processed = 0, skipped = 0, errors = 0
@@ -92,9 +93,10 @@ async function processCompany(
 
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client })
 
+  const faxSender = gmailToken.faxSenderEmail || DEFAULT_FAX_SENDER
   const searchRes = await gmail.users.messages.list({
     userId: gmailToken.email,
-    q: `from:${FAX_SENDER} is:unread`,
+    q: `from:${faxSender} is:unread`,
     maxResults: 10,
   })
 
@@ -226,7 +228,7 @@ export async function GET(req: NextRequest) {
 
   // Gmail接続済みの全会社を取得
   const tokens = await prisma.gmailToken.findMany({
-    select: { companyId: true, email: true, accessToken: true, refreshToken: true },
+    select: { companyId: true, email: true, accessToken: true, refreshToken: true, faxSenderEmail: true },
   })
 
   if (tokens.length === 0) {

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
-import { Building2, Users, Shield, Copy, Trash2, Plus, Truck, QrCode, Check, X, Bell, Printer, Mail, Unlink, ExternalLink } from 'lucide-react'
+import { Building2, Users, Shield, Copy, Trash2, Plus, Truck, QrCode, Check, X, Bell, Printer, Mail, Unlink, ExternalLink, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import QRCode from 'react-qr-code'
 
@@ -60,8 +60,11 @@ export default function SettingsPage() {
   const [addingSupplier, setAddingSupplier] = useState(false)
 
   // Gmail接続状態
-  const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; email: string | null; connectedAt: string | null } | null>(null)
+  const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; email: string | null; connectedAt: string | null; faxSenderEmail: string } | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [editingFaxSender, setEditingFaxSender] = useState(false)
+  const [faxSenderInput, setFaxSenderInput] = useState('')
+  const [savingFaxSender, setSavingFaxSender] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -73,14 +76,21 @@ export default function SettingsPage() {
       setCompany(companyData)
       setNotifSettings(notifData)
       if (isAdmin) {
-        const [usersData, suppliersData, gmailData] = await Promise.all([
+        const [usersData, suppliersData] = await Promise.all([
           apiFetch<UserInfo[]>('/api/mobile/users', { headers: authHeaders() }),
           apiFetch<{ id: string; name: string }[]>('/api/mobile/suppliers', { headers: authHeaders() }),
-          apiFetch<{ connected: boolean; email: string | null; connectedAt: string | null }>('/api/auth/gmail/status', { headers: authHeaders() }),
         ])
         setUsers(usersData)
         setSuppliers(suppliersData)
-        setGmailStatus(gmailData)
+        // Gmail状態は独立して取得（失敗しても他のデータに影響させない）
+        try {
+          const gmailData = await apiFetch<{ connected: boolean; email: string | null; connectedAt: string | null; faxSenderEmail: string }>(
+            '/api/auth/gmail/status', { headers: authHeaders() }
+          )
+          setGmailStatus(gmailData)
+        } catch {
+          setGmailStatus({ connected: false, email: null, connectedAt: null, faxSenderEmail: 'FromBrotherDevice@brother.com' })
+        }
       }
     } catch {
       toast.error('データの取得に失敗しました')
@@ -133,12 +143,31 @@ export default function SettingsPage() {
     setDisconnecting(true)
     try {
       await apiFetch('/api/auth/gmail/status', { method: 'DELETE', headers: authHeaders() })
-      setGmailStatus({ connected: false, email: null, connectedAt: null })
+      setGmailStatus({ connected: false, email: null, connectedAt: null, faxSenderEmail: 'FromBrotherDevice@brother.com' })
       toast.success('Gmail接続を解除しました')
     } catch {
       toast.error('解除に失敗しました')
     } finally {
       setDisconnecting(false)
+    }
+  }
+
+  const handleSaveFaxSender = async () => {
+    if (!faxSenderInput.trim()) return
+    setSavingFaxSender(true)
+    try {
+      await apiFetch('/api/auth/gmail/status', {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: { faxSenderEmail: faxSenderInput.trim() },
+      })
+      setGmailStatus(s => s ? { ...s, faxSenderEmail: faxSenderInput.trim() } : s)
+      setEditingFaxSender(false)
+      toast.success('FAX送信元メールアドレスを保存しました')
+    } catch {
+      toast.error('保存に失敗しました')
+    } finally {
+      setSavingFaxSender(false)
     }
   }
 
@@ -485,6 +514,7 @@ export default function SettingsPage() {
             {/* 接続状態 */}
             {gmailStatus?.connected ? (
               <div className="space-y-3">
+                {/* 接続中バッジ */}
                 <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200">
                   <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -497,6 +527,45 @@ export default function SettingsPage() {
                     )}
                   </div>
                 </div>
+
+                {/* FAX送信元メールアドレス設定 */}
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+                  <p className="text-xs font-medium text-[#102A43] flex items-center gap-1">
+                    <Mail className="h-3.5 w-3.5" />
+                    FAX送信元メールアドレス
+                  </p>
+                  {editingFaxSender ? (
+                    <div className="flex gap-2">
+                      <Input
+                        value={faxSenderInput}
+                        onChange={e => setFaxSenderInput(e.target.value)}
+                        placeholder="例: FromBrotherDevice@brother.com"
+                        className="text-xs h-8 flex-1"
+                        autoFocus
+                      />
+                      <Button size="sm" className="h-8 px-2 bg-[#102A43]" onClick={handleSaveFaxSender} disabled={savingFaxSender}>
+                        <Check className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setEditingFaxSender(false)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-[#64748B] truncate font-mono">{gmailStatus.faxSenderEmail}</p>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 shrink-0"
+                        onClick={() => { setFaxSenderInput(gmailStatus.faxSenderEmail); setEditingFaxSender(true) }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-[#64748B]">複合機から転送されるメールの送信元アドレスを入力してください</p>
+                </div>
+
                 <Button
                   variant="outline"
                   size="sm"

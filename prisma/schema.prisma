@@ -36,15 +36,16 @@ model FaxLog {
 }
 
 model GmailToken {
-  id           String   @id @default(cuid())
-  companyId    String   @unique
-  email        String
-  accessToken  String
-  refreshToken String
-  expiresAt    DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  company      Company  @relation(fields: [companyId], references: [id])
+  id             String   @id @default(cuid())
+  companyId      String   @unique
+  email          String
+  accessToken    String
+  refreshToken   String
+  expiresAt      DateTime?
+  faxSenderEmail String   @default("FromBrotherDevice@brother.com")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  company        Company  @relation(fields: [companyId], references: [id])
 }
 
 model User {
