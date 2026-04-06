@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
-import { Building2, Users, Shield, Copy, Trash2, Plus, Truck, QrCode, Check, X, Bell } from 'lucide-react'
+import { Building2, Users, Shield, Copy, Trash2, Plus, Truck, QrCode, Check, X, Bell, Printer, Mail, Unlink, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import QRCode from 'react-qr-code'
 
@@ -59,6 +59,10 @@ export default function SettingsPage() {
   const [newSupplier, setNewSupplier] = useState('')
   const [addingSupplier, setAddingSupplier] = useState(false)
 
+  // Gmail接続状態
+  const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; email: string | null; connectedAt: string | null } | null>(null)
+  const [disconnecting, setDisconnecting] = useState(false)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
@@ -69,12 +73,14 @@ export default function SettingsPage() {
       setCompany(companyData)
       setNotifSettings(notifData)
       if (isAdmin) {
-        const [usersData, suppliersData] = await Promise.all([
+        const [usersData, suppliersData, gmailData] = await Promise.all([
           apiFetch<UserInfo[]>('/api/mobile/users', { headers: authHeaders() }),
           apiFetch<{ id: string; name: string }[]>('/api/mobile/suppliers', { headers: authHeaders() }),
+          apiFetch<{ connected: boolean; email: string | null; connectedAt: string | null }>('/api/auth/gmail/status', { headers: authHeaders() }),
         ])
         setUsers(usersData)
         setSuppliers(suppliersData)
+        setGmailStatus(gmailData)
       }
     } catch {
       toast.error('データの取得に失敗しました')
@@ -101,6 +107,40 @@ export default function SettingsPage() {
   }
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Gmail OAuth結果をURLパラメータで受け取ってトースト表示
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('gmail_success')) {
+      toast.success('Gmailを接続しました。FAXメールが自動登録されます。')
+      window.history.replaceState({}, '', '/settings')
+      fetchData()
+    } else if (params.get('gmail_error')) {
+      const errMap: Record<string, string> = {
+        cancelled: 'Gmail接続がキャンセルされました',
+        no_refresh_token: '接続に失敗しました（もう一度試してください）',
+        config: 'サーバー設定が不足しています',
+        server: 'サーバーエラーが発生しました',
+      }
+      toast.error(errMap[params.get('gmail_error') ?? ''] ?? 'Gmail接続に失敗しました')
+      window.history.replaceState({}, '', '/settings')
+    }
+  }, [fetchData])
+
+  const handleGmailDisconnect = async () => {
+    if (!confirm('Gmail接続を解除します。FAXの自動登録が停止されます。よろしいですか？')) return
+    setDisconnecting(true)
+    try {
+      await apiFetch('/api/auth/gmail/status', { method: 'DELETE', headers: authHeaders() })
+      setGmailStatus({ connected: false, email: null, connectedAt: null })
+      toast.success('Gmail接続を解除しました')
+    } catch {
+      toast.error('解除に失敗しました')
+    } finally {
+      setDisconnecting(false)
+    }
+  }
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     setUpdatingRole(userId)
@@ -412,6 +452,82 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* FAX自動登録（管理者専用） */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5" />
+              FAX自動登録
+            </CardTitle>
+            <CardDescription>
+              複合機から届くFAXをGmail経由で自動受信し、納期データとして登録します
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* 仕組みの説明 */}
+            <div className="bg-blue-50 rounded-lg p-3 space-y-1.5">
+              <p className="text-sm font-medium text-blue-800 flex items-center gap-1.5">
+                <Mail className="h-4 w-4" />
+                仕組み
+              </p>
+              <ul className="text-xs text-blue-700 space-y-1 ml-5 list-disc">
+                <li>複合機（Brother等）からFAXが届くと、メールに<strong>PNG添付</strong>で転送されます</li>
+                <li>AIがFAX画像を自動読み取り（OCR）して納期・商品名を抽出</li>
+                <li><strong>30分ごと</strong>に自動チェックして登録（登録済みは重複スキップ）</li>
+                <li>登録されたデータにはカレンダーで <span className="bg-purple-100 text-purple-700 px-1 rounded">FAX</span> バッジが表示されます</li>
+              </ul>
+            </div>
+
+            <Separator />
+
+            {/* 接続状態 */}
+            {gmailStatus?.connected ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-green-800">接続中</p>
+                    <p className="text-xs text-green-600 truncate">{gmailStatus.email}</p>
+                    {gmailStatus.connectedAt && (
+                      <p className="text-xs text-green-500">
+                        接続日: {new Date(gmailStatus.connectedAt).toLocaleDateString('ja-JP')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 border-red-300 hover:bg-red-50 w-full"
+                  onClick={handleGmailDisconnect}
+                  disabled={disconnecting}
+                >
+                  <Unlink className="h-3.5 w-3.5 mr-1.5" />
+                  {disconnecting ? '解除中...' : 'Gmail接続を解除する'}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="w-2 h-2 rounded-full bg-gray-400 shrink-0" />
+                  <p className="text-sm text-gray-600">未接続</p>
+                </div>
+                <a href="/api/auth/gmail/connect" className="block">
+                  <Button className="w-full bg-[#102A43] hover:bg-[#1a3a5c]" size="sm">
+                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                    Gmailを接続してFAX自動登録を有効にする
+                  </Button>
+                </a>
+                <p className="text-xs text-[#64748B]">
+                  ※ Googleアカウントの認証画面に移動します。FAXメールが届くGmailアカウントで許可してください。
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Supplier management (admin only) */}
       {isAdmin && (

@@ -13,8 +13,9 @@ model Company {
   joinCode  String     @unique
   createdAt DateTime   @default(now())
   users     User[]
-  deliveries Delivery[]
-  suppliers  Supplier[]
+  deliveries  Delivery[]
+  suppliers   Supplier[]
+  gmailToken  GmailToken?
 }
 
 model Supplier {
@@ -32,6 +33,18 @@ model FaxLog {
   companyId String
   processed Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+model GmailToken {
+  id           String   @id @default(cuid())
+  companyId    String   @unique
+  email        String
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  company      Company  @relation(fields: [companyId], references: [id])
 }
 
 model User {
