@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 export async function GET(req: NextRequest) {
   // Protect the cron endpoint
   const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
