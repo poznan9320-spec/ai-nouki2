@@ -33,7 +33,7 @@ export async function apiFetch<T = unknown>(
     }
   }
 
-  const res = await fetch(url, init)
+  const res = await fetch(url, { ...init, credentials: 'same-origin' })
 
   if (!res.ok) {
     let msg = `エラーが発生しました (${res.status})`
