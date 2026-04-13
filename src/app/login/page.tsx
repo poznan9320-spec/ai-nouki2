@@ -47,7 +47,7 @@ function LoginPageInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
+      <div className="min-h-screen flex items-center justify-center bg-[#F1F5F9]">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-[#102A43] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-[#64748B] text-sm">読み込み中...</p>
@@ -119,7 +119,7 @@ function LoginPageInner() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA] p-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#F1F5F9] p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-[#102A43]">AI納期管理</h1>
@@ -321,7 +321,7 @@ function LoginPageInner() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
+      <div className="min-h-screen flex items-center justify-center bg-[#F1F5F9]">
         <div className="w-12 h-12 border-4 border-[#102A43] border-t-transparent rounded-full animate-spin" />
       </div>
     }>
