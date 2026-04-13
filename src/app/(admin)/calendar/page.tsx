@@ -82,19 +82,22 @@ export default function CalendarPage() {
   const fetchCalendar = useCallback(async () => {
     setLoading(true)
     try {
-      const [data, memoData] = await Promise.all([
-        apiFetch<CalendarResponse>(
-          `/api/mobile/calendar?year=${year}&month=${month}`,
-          { headers: authHeaders() }
-        ),
-        apiFetch<{ memos: Record<string, string> }>(
-          `/api/mobile/calendar-memo?year=${year}&month=${month}`,
-          { headers: authHeaders() }
-        ),
-      ])
+      const data = await apiFetch<CalendarResponse>(
+        `/api/mobile/calendar?year=${year}&month=${month}`,
+        { headers: authHeaders() }
+      )
       setCalendarData(data.calendar)
       setSuppliers(data.suppliers)
-      setMemos(memoData.memos)
+      // メモは失敗してもカレンダー本体には影響させない
+      try {
+        const memoData = await apiFetch<{ memos: Record<string, string> }>(
+          `/api/mobile/calendar-memo?year=${year}&month=${month}`,
+          { headers: authHeaders() }
+        )
+        setMemos(memoData.memos)
+      } catch {
+        // メモ取得失敗は無視
+      }
     } catch {
       toast.error('カレンダーデータの取得に失敗しました')
     } finally {
