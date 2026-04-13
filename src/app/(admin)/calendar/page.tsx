@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { authHeaders } from '@/lib/auth-context'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ChevronLeft, ChevronRight, Pencil, Trash2, X, Check, Printer } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Pencil, Trash2, X, Check, Printer, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -51,6 +51,13 @@ const STATUS_COLORS: Record<string, string> = {
 
 const DEFAULT_COLORS = ['#ef4444','#3b82f6','#22c55e','#f97316','#a855f7','#ec4899','#14b8a6','#eab308']
 
+function hexToRgba(hex: string, alpha: number) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
 export default function CalendarPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -59,27 +66,35 @@ export default function CalendarPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-
-  // Edit modal state
   const [editItem, setEditItem] = useState<CalendarItem | null>(null)
   const [editForm, setEditForm] = useState({
     productName: '', quantity: '', deliveryDate: '', status: '', supplierName: '', notes: ''
   })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-
-  // Color edit state
   const [editingSupplier, setEditingSupplier] = useState<string | null>(null)
+  const [memos, setMemos] = useState<Record<string, string>>({})
+  const [editingMemo, setEditingMemo] = useState(false)
+  const [memoText, setMemoText] = useState('')
+  const [savingMemo, setSavingMemo] = useState(false)
+  const memoRef = useRef<HTMLTextAreaElement>(null)
 
   const fetchCalendar = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await apiFetch<CalendarResponse>(
-        `/api/mobile/calendar?year=${year}&month=${month}`,
-        { headers: authHeaders() }
-      )
+      const [data, memoData] = await Promise.all([
+        apiFetch<CalendarResponse>(
+          `/api/mobile/calendar?year=${year}&month=${month}`,
+          { headers: authHeaders() }
+        ),
+        apiFetch<{ memos: Record<string, string> }>(
+          `/api/mobile/calendar-memo?year=${year}&month=${month}`,
+          { headers: authHeaders() }
+        ),
+      ])
       setCalendarData(data.calendar)
       setSuppliers(data.suppliers)
+      setMemos(memoData.memos)
     } catch {
       toast.error('カレンダーデータの取得に失敗しました')
     } finally {
@@ -113,19 +128,23 @@ export default function CalendarPage() {
 
   const selectedItems = selectedDate ? (calendarData[selectedDate] ?? []) : []
 
-  // Supplier color map by name
   const supplierColorMap: Record<string, string> = {}
   for (const s of suppliers) {
     if (s.color) supplierColorMap[s.name] = s.color
   }
 
-  // All unique suppliers appearing in this month's calendar
   const activeSupplierNames = new Set<string>()
   for (const items of Object.values(calendarData)) {
     for (const item of items) {
       if (item.supplier_name) activeSupplierNames.add(item.supplier_name)
     }
   }
+
+  const getColor = (item: CalendarItem) =>
+    item.supplier_color
+      ?? (item.supplier_name
+        ? DEFAULT_COLORS[[...activeSupplierNames].indexOf(item.supplier_name) % DEFAULT_COLORS.length]
+        : '#64748B')
 
   const openEdit = (item: CalendarItem) => {
     setEditItem(item)
@@ -192,7 +211,6 @@ export default function CalendarPage() {
         body: JSON.stringify({ color }),
       })
       setSuppliers(prev => prev.map(s => s.name === supplierName ? { ...s, color } : s))
-      // Update calendar items in state
       setCalendarData(prev => {
         const next = { ...prev }
         for (const key of Object.keys(next)) {
@@ -208,9 +226,37 @@ export default function CalendarPage() {
     setEditingSupplier(null)
   }
 
+  const startMemoEdit = () => {
+    setMemoText(selectedDate ? (memos[selectedDate] ?? '') : '')
+    setEditingMemo(true)
+    setTimeout(() => memoRef.current?.focus(), 50)
+  }
+
+  const saveMemo = async () => {
+    if (!selectedDate) return
+    setSavingMemo(true)
+    try {
+      await apiFetch('/api/mobile/calendar-memo', {
+        method: 'PUT',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate, content: memoText }),
+      })
+      setMemos(prev => {
+        const next = { ...prev }
+        if (memoText.trim()) next[selectedDate] = memoText.trim()
+        else delete next[selectedDate]
+        return next
+      })
+      setEditingMemo(false)
+      toast.success('メモを保存しました')
+    } catch {
+      toast.error('メモの保存に失敗しました')
+    }
+    setSavingMemo(false)
+  }
+
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[#102A43]">カレンダー</h1>
         <div className="flex items-center gap-2">
@@ -226,7 +272,6 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Supplier Color Legend */}
       {activeSupplierNames.size > 0 && (
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-xs text-[#64748B] font-medium">取引先カラー:</span>
@@ -273,7 +318,6 @@ export default function CalendarPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Calendar grid */}
           <div className="lg:col-span-2">
             <Card>
               <CardContent className="p-3">
@@ -296,53 +340,61 @@ export default function CalendarPage() {
                     const isToday = dateKey === todayStr
                     const isSelected = dateKey === selectedDate
                     const dayOfWeek = (firstDay + day - 1) % 7
+                    const hasMemo = !!memos[dateKey]
 
-                    // Collect unique supplier colors for this day
                     const dayColors: string[] = []
                     const seen = new Set<string>()
                     for (const item of items) {
-                      const color = item.supplier_color
-                        ?? (item.supplier_name ? (DEFAULT_COLORS[([...activeSupplierNames].indexOf(item.supplier_name)) % DEFAULT_COLORS.length]) : '#64748B')
+                      const color = getColor(item)
                       if (!seen.has(color)) { seen.add(color); dayColors.push(color) }
                     }
+                    const primaryColor = dayColors[0]
 
                     return (
                       <button
                         key={i}
                         onClick={() => setSelectedDate(isSelected ? null : dateKey)}
                         className={cn(
-                          'aspect-square p-1 flex flex-col items-center rounded-lg transition-colors text-xs border',
-                          isSelected ? 'bg-[#102A43] text-white border-[#102A43]'
-                            : isToday ? 'bg-blue-50 border-blue-300 text-[#102A43]'
+                          'aspect-square p-1 flex flex-col items-center rounded-lg transition-all text-xs border relative',
+                          isSelected
+                            ? 'bg-[#102A43] text-white border-[#102A43] shadow-md'
+                            : isToday
+                            ? 'bg-blue-50 border-blue-300 text-[#102A43]'
                             : 'border-transparent hover:bg-gray-50',
                           dayOfWeek === 0 && !isSelected ? 'text-red-500' : '',
                           dayOfWeek === 6 && !isSelected ? 'text-blue-500' : '',
                         )}
+                        style={
+                          !isSelected && !isToday && primaryColor
+                            ? { backgroundColor: hexToRgba(primaryColor, 0.12), borderColor: hexToRgba(primaryColor, 0.35), borderWidth: 1 }
+                            : undefined
+                        }
                       >
                         <span className="font-medium leading-none">{day}</span>
                         {dayColors.length > 0 && (
-                          <div className="flex gap-0.5 mt-0.5 flex-wrap justify-center">
-                            {dayColors.slice(0, 3).map((c, ci) => (
+                          <div className="flex gap-0.5 mt-0.5 w-full px-0.5 justify-center">
+                            {dayColors.slice(0, 4).map((c, ci) => (
                               <span
                                 key={ci}
-                                className="w-2 h-2 rounded-full inline-block"
-                                style={{ background: isSelected ? 'white' : c }}
+                                className="h-1.5 flex-1 rounded-full inline-block"
+                                style={{ background: isSelected ? 'rgba(255,255,255,0.6)' : c, maxWidth: 14 }}
                               />
                             ))}
-                            {dayColors.length > 3 && (
-                              <span className={cn('text-[8px] leading-none', isSelected ? 'text-white' : 'text-gray-500')}>
-                                +{dayColors.length - 3}
-                              </span>
-                            )}
                           </div>
                         )}
                         {items.length > 0 && (
                           <span className={cn(
-                            'text-[9px] leading-none',
-                            isSelected ? 'text-white/70' : 'text-gray-400'
+                            'text-[9px] leading-none mt-0.5',
+                            isSelected ? 'text-white/70' : 'text-gray-500 font-medium'
                           )}>
                             {items.length}件
                           </span>
+                        )}
+                        {hasMemo && (
+                          <span className={cn(
+                            'absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full',
+                            isSelected ? 'bg-yellow-300' : 'bg-yellow-400'
+                          )} />
                         )}
                       </button>
                     )
@@ -352,25 +404,77 @@ export default function CalendarPage() {
             </Card>
           </div>
 
-          {/* Detail panel */}
           <div>
             <Card className="h-full">
               <CardContent className="p-4">
                 {selectedDate ? (
-                  <div>
-                    <h3 className="font-semibold text-[#102A43] mb-3">
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-[#102A43]">
                       {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ja-JP', {
                         month: 'long', day: 'numeric', weekday: 'short'
                       })}
                     </h3>
+
+                    <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-yellow-700 flex items-center gap-1">
+                          <StickyNote className="h-3 w-3" />
+                          メモ
+                        </span>
+                        {!editingMemo && (
+                          <button
+                            onClick={startMemoEdit}
+                            className="text-xs text-yellow-600 hover:text-yellow-800 flex items-center gap-0.5"
+                          >
+                            <Pencil className="h-3 w-3" />
+                            {memos[selectedDate] ? '編集' : '追加'}
+                          </button>
+                        )}
+                      </div>
+                      {editingMemo ? (
+                        <div className="space-y-2">
+                          <Textarea
+                            ref={memoRef}
+                            value={memoText}
+                            onChange={e => setMemoText(e.target.value)}
+                            placeholder="この日のメモを入力..."
+                            rows={3}
+                            className="text-xs bg-white border-yellow-300 focus:border-yellow-400 resize-none"
+                          />
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-xs px-2"
+                              onClick={() => setEditingMemo(false)}
+                              disabled={savingMemo}
+                            >
+                              キャンセル
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-6 text-xs px-2 bg-yellow-500 hover:bg-yellow-600 text-white"
+                              onClick={saveMemo}
+                              disabled={savingMemo}
+                            >
+                              <Check className="h-3 w-3 mr-0.5" />
+                              {savingMemo ? '保存中...' : '保存'}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-yellow-800 whitespace-pre-wrap min-h-4">
+                          {memos[selectedDate] || <span className="text-yellow-400 italic">メモなし</span>}
+                        </p>
+                      )}
+                    </div>
+
                     {selectedItems.length === 0 ? (
                       <p className="text-sm text-[#64748B]">入荷予定なし</p>
                     ) : (
                       <div className="space-y-2">
                         {selectedItems.map((item) => {
-                          const supplierIdx = item.supplier_name ? [...activeSupplierNames].indexOf(item.supplier_name) : -1
-                          const color = item.supplier_color
-                            ?? (supplierIdx >= 0 ? DEFAULT_COLORS[supplierIdx % DEFAULT_COLORS.length] : '#64748B')
+                          const color = getColor(item)
                           return (
                             <div
                               key={item.id}
@@ -402,7 +506,7 @@ export default function CalendarPage() {
                                   </span>
                                   {item.notes && (
                                     <p className="text-xs text-[#64748B] mt-1 bg-yellow-50 rounded px-1.5 py-1 border border-yellow-100">
-                                      📝 {item.notes}
+                                      {item.notes}
                                     </p>
                                   )}
                                 </div>
@@ -434,7 +538,6 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Edit Dialog */}
       <Dialog open={!!editItem} onOpenChange={(open) => { if (!open) setEditItem(null) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>

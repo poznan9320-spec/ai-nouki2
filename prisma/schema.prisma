@@ -16,6 +16,7 @@ model Company {
   deliveries  Delivery[]
   suppliers   Supplier[]
   gmailToken  GmailToken?
+  calendarMemos CalendarMemo[]
 }
 
 model Supplier {
@@ -165,4 +166,16 @@ enum NotificationType {
   CHAT
   ORDER_STATUS
   DELIVERY_UPDATE
+}
+
+model CalendarMemo {
+  id        String   @id @default(cuid())
+  companyId String
+  date      String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company  @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, date])
 }
