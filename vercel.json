@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/cron/notify-deliveries",
-      "schedule": "0 * * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/fax-poll",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
