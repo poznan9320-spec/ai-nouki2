@@ -65,7 +65,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     })
-    // HttpOnly cookie is set by the server
+    // HttpOnly cookie is set by the server; also persist token for API calls
+    if (data.token) localStorage.setItem('token', data.token)
     setUser(data.user)
     setCompany(data.company)
   }
@@ -76,13 +77,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ companyName, email, password, name }),
     })
-    // HttpOnly cookie is set by the server
+    if (data.token) localStorage.setItem('token', data.token)
     setUser(data.user)
     setCompany(data.company)
   }
 
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
+    localStorage.removeItem('token')
     setUser(null)
     setCompany(null)
   }

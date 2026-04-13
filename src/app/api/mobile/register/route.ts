@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
     })
 
     const res = NextResponse.json({
+      token,
       user: { id: user.id, email: user.email, name: user.name, role: user.role },
       company: { id: company.id, name: company.name, joinCode: company.joinCode },
     })
