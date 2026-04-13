@@ -7,6 +7,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!user || user.role !== 'ADMIN') return NextResponse.json({ error: '権限がありません' }, { status: 403 })
   const { id } = await params
   const { role } = await req.json()
+  if (role !== 'ADMIN' && role !== 'EMPLOYEE') {
+    return NextResponse.json({ error: '無効なロールです' }, { status: 400 })
+  }
   try {
     await prisma.user.update({ where: { id, companyId: user.companyId }, data: { role } })
   } catch {

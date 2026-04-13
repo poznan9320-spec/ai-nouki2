@@ -99,7 +99,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   )
 }
 
-// Kept for API calls that still pass headers explicitly
+// Returns auth headers including Bearer token from localStorage if available
 export function authHeaders(): Record<string, string> {
-  return { 'Content-Type': 'application/json' }
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+  return token
+    ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    : { 'Content-Type': 'application/json' }
 }

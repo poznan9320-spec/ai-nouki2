@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const limit = parseInt(searchParams.get('limit') || '50')
 
   const messages = await prisma.message.findMany({
-    where: { chatRoom: room },
+    where: { chatRoom: room, sender: { companyId: user.companyId } },
     include: { sender: { select: { id: true, name: true, email: true, role: true } } },
     orderBy: { createdAt: 'desc' },
     skip: (page - 1) * limit,
