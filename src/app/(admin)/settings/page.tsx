@@ -55,9 +55,11 @@ export default function SettingsPage() {
   const [savingNotif, setSavingNotif] = useState(false)
 
   // 取引先管理
-  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([])
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string; color: string | null }[]>([])
   const [newSupplier, setNewSupplier] = useState('')
   const [addingSupplier, setAddingSupplier] = useState(false)
+  const [editingSupplierColor, setEditingSupplierColor] = useState<string | null>(null)
+  const SUPPLIER_COLORS = ['#ef4444','#3b82f6','#22c55e','#f97316','#a855f7','#ec4899','#14b8a6','#eab308']
 
   // Gmail接続状態
   const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; email: string | null; connectedAt: string | null; faxSenderEmail: string } | null>(null)
@@ -78,7 +80,7 @@ export default function SettingsPage() {
       if (isAdmin) {
         const [usersData, suppliersData] = await Promise.all([
           apiFetch<UserInfo[]>('/api/mobile/users', { headers: authHeaders() }),
-          apiFetch<{ id: string; name: string }[]>('/api/mobile/suppliers', { headers: authHeaders() }),
+          apiFetch<{ id: string; name: string; color: string | null }[]>('/api/mobile/suppliers', { headers: authHeaders() }),
         ])
         setUsers(usersData)
         setSuppliers(suppliersData)
@@ -206,7 +208,7 @@ export default function SettingsPage() {
     if (!newSupplier.trim()) return
     setAddingSupplier(true)
     try {
-      const s = await apiFetch<{ id: string; name: string }>('/api/mobile/suppliers', {
+      const s = await apiFetch<{ id: string; name: string; color: string | null }>('/api/mobile/suppliers', {
         method: 'POST',
         body: { name: newSupplier.trim() },
         headers: authHeaders(),
@@ -218,6 +220,21 @@ export default function SettingsPage() {
       toast.error('追加に失敗しました')
     } finally {
       setAddingSupplier(false)
+    }
+  }
+
+  const handleUpdateSupplierColor = async (id: string, color: string) => {
+    try {
+      await apiFetch(`/api/mobile/suppliers/${id}`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: { color },
+      })
+      setSuppliers(prev => prev.map(s => s.id === id ? { ...s, color } : s))
+      setEditingSupplierColor(null)
+      toast.success('カラーを更新しました')
+    } catch {
+      toast.error('カラーの更新に失敗しました')
     }
   }
 
@@ -633,12 +650,35 @@ export default function SettingsPage() {
             ) : (
               <div className="space-y-1">
                 {suppliers.map(s => (
-                  <div key={s.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
-                    <span className="text-sm text-[#102A43]">{s.name}</span>
+                  <div key={s.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <button
+                        className="w-5 h-5 rounded-full border-2 border-white shadow shrink-0 ring-1 ring-gray-200"
+                        style={{ background: s.color ?? '#64748B' }}
+                        onClick={() => setEditingSupplierColor(editingSupplierColor === s.id ? null : s.id)}
+                        title="カラーを変更"
+                      />
+                      <span className="text-sm text-[#102A43] truncate">{s.name}</span>
+                    </div>
+                    {editingSupplierColor === s.id && (
+                      <div className="flex gap-1 items-center">
+                        {SUPPLIER_COLORS.map(c => (
+                          <button
+                            key={c}
+                            className="w-5 h-5 rounded-full border-2 border-white shadow hover:scale-110 transition-transform"
+                            style={{ background: c, outline: s.color === c ? `2px solid ${c}` : 'none', outlineOffset: 2 }}
+                            onClick={() => handleUpdateSupplierColor(s.id, c)}
+                          />
+                        ))}
+                        <button onClick={() => setEditingSupplierColor(null)} className="ml-1 text-gray-400 hover:text-gray-600">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                      className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50 shrink-0"
                       onClick={() => handleDeleteSupplier(s.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
