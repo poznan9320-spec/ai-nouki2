@@ -320,7 +320,11 @@ function LoginPageInner() {
 
 export default function LoginPage() {
   return (
-    <Suspense>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
+        <div className="w-12 h-12 border-4 border-[#102A43] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
       <LoginPageInner />
     </Suspense>
   )
