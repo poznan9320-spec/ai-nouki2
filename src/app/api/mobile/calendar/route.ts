@@ -13,7 +13,6 @@ export async function GET(req: NextRequest) {
   const end = new Date(year, month, 0, 23, 59, 59)
 
   let deliveries: Awaited<ReturnType<typeof prisma.delivery.findMany>> = []
-  let suppliers: Awaited<ReturnType<typeof prisma.supplier.findMany>> = []
   try {
     deliveries = await prisma.delivery.findMany({
       where: { companyId: user.companyId, deliveryDate: { gte: start, lte: end } },
@@ -23,19 +22,29 @@ export async function GET(req: NextRequest) {
     console.error('[calendar] delivery query failed:', e)
     return NextResponse.json({ error: `delivery error: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }
-  try {
-    suppliers = await prisma.supplier.findMany({
-      where: { companyId: user.companyId },
-    })
-  } catch (e) {
-    console.error('[calendar] supplier query failed:', e)
-    return NextResponse.json({ error: `supplier error: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
-  }
 
-  // Build supplier color map by name
+  // Build supplier color map — use raw SQL to avoid failures when schema columns (e.g. color) are missing in DB
   const supplierColorMap: Record<string, string> = {}
-  for (const s of suppliers) {
-    if (s.color) supplierColorMap[s.name] = s.color
+  let suppliersForResponse: Array<{ id: string; name: string; color: string | null }> = []
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: string; name: string; color: string | null }>>`
+      SELECT id, name, color FROM "Supplier" WHERE "companyId" = ${user.companyId}
+    `
+    for (const s of rows) {
+      if (s.color) supplierColorMap[s.name] = s.color
+    }
+    suppliersForResponse = rows
+  } catch (e) {
+    // color column may not exist yet — skip colors gracefully so calendar still loads
+    console.warn('[calendar] supplier color query failed, trying without color:', e instanceof Error ? e.message : String(e))
+    try {
+      const rows = await prisma.$queryRaw<Array<{ id: string; name: string }>>`
+        SELECT id, name FROM "Supplier" WHERE "companyId" = ${user.companyId}
+      `
+      suppliersForResponse = rows.map(r => ({ ...r, color: null }))
+    } catch (e2) {
+      console.warn('[calendar] supplier query failed entirely:', e2 instanceof Error ? e2.message : String(e2))
+    }
   }
 
   type CalendarItem = {
@@ -65,5 +74,5 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  return NextResponse.json({ calendar, suppliers })
+  return NextResponse.json({ calendar, suppliers: suppliersForResponse })
 }
