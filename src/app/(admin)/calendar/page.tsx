@@ -167,15 +167,15 @@ export default function CalendarPage() {
     try {
       await apiFetch(`/api/mobile/deliveries/${editItem.id}`, {
         method: 'PUT',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        headers: authHeaders(),
+        body: {
           productName: editForm.productName,
           quantity: parseInt(editForm.quantity) || 1,
           deliveryDate: editForm.deliveryDate,
           status: editForm.status,
           supplierName: editForm.supplierName || null,
           notes: editForm.notes || null,
-        }),
+        },
       })
       toast.success('更新しました')
       setEditItem(null)
@@ -210,8 +210,8 @@ export default function CalendarPage() {
     try {
       await apiFetch(`/api/mobile/suppliers/${supplier.id}`, {
         method: 'PATCH',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ color }),
+        headers: authHeaders(),
+        body: { color },
       })
       setSuppliers(prev => prev.map(s => s.name === supplierName ? { ...s, color } : s))
       setCalendarData(prev => {
@@ -241,8 +241,8 @@ export default function CalendarPage() {
     try {
       await apiFetch('/api/mobile/calendar-memo', {
         method: 'PUT',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate, content: memoText }),
+        headers: authHeaders(),
+        body: { date: selectedDate, content: memoText },
       })
       setMemos(prev => {
         const next = { ...prev }

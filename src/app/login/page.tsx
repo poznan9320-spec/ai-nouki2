@@ -31,7 +31,7 @@ function LoginPageInner() {
   const [joinName, setJoinName] = useState('')
   const [joinLoading, setJoinLoading] = useState(false)
   const [joinPending, setJoinPending] = useState(false)
-  const [defaultTab, setDefaultTab] = useState('login')
+  const [activeTab, setActiveTab] = useState('login')
 
   useEffect(() => {
     if (!loading && user) router.push('/dashboard')
@@ -41,7 +41,7 @@ function LoginPageInner() {
     const code = searchParams.get('join')
     if (code) {
       setJoinCode(code.toUpperCase())
-      setDefaultTab('join')
+      setActiveTab('join')
     }
   }, [searchParams])
 
@@ -82,6 +82,10 @@ function LoginPageInner() {
       toast.error('全ての項目を入力してください')
       return
     }
+    if (joinPassword.length < 8) {
+      toast.error('パスワードは8文字以上で入力してください')
+      return
+    }
     setJoinLoading(true)
     try {
       const res = await fetch('/api/mobile/register-employee', {
@@ -105,6 +109,10 @@ function LoginPageInner() {
       toast.error('全ての項目を入力してください')
       return
     }
+    if (adminPassword.length < 8) {
+      toast.error('パスワードは8文字以上で入力してください')
+      return
+    }
     setRegisterLoading(true)
     try {
       await register(companyName, adminEmail, adminPassword, adminName)
@@ -126,7 +134,7 @@ function LoginPageInner() {
           <p className="text-[#64748B] mt-2">B2B配送・納期管理システム</p>
         </div>
 
-        <Tabs defaultValue={defaultTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="login">ログイン</TabsTrigger>
             <TabsTrigger value="join">会社に参加</TabsTrigger>

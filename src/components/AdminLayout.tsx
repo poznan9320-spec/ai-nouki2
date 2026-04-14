@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
@@ -36,6 +36,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    if (!token) return
+    fetch('/api/mobile/notifications?unread_only=true', {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'same-origin',
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: unknown[]) => setUnreadCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => {})
+  }, [pathname])
 
   const handleLogout = () => {
     logout()
@@ -100,8 +113,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     )}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
-                    <span>{item.label}</span>
-                    {isActive && <ChevronRight className="h-3 w-3 ml-auto" />}
+                    <span className="flex-1">{item.label}</span>
+                    {item.href === '/notifications' && unreadCount > 0 ? (
+                      <span className="bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    ) : isActive ? (
+                      <ChevronRight className="h-3 w-3" />
+                    ) : null}
                   </Link>
                 </li>
               )
