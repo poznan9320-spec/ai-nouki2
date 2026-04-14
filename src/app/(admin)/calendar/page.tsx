@@ -98,8 +98,9 @@ export default function CalendarPage() {
       } catch {
         // メモ取得失敗は無視
       }
-    } catch {
-      toast.error('カレンダーデータの取得に失敗しました')
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e)
+      toast.error(`カレンダーエラー: ${detail}`)
     } finally {
       setLoading(false)
     }
