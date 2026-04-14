@@ -39,6 +39,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
+    if (pathname === '/notifications') {
+      setUnreadCount(0)
+      return
+    }
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
     if (!token) return
     fetch('/api/mobile/notifications?unread_only=true', {
@@ -172,10 +176,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               {navItems.find(item => pathname === item.href || pathname?.startsWith(item.href + '/'))?.label ?? 'ページ'}
             </h2>
           </div>
+          {unreadCount > 0 && pathname !== '/notifications' && (
+            <Link href="/notifications" className="relative p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+              <Bell className="h-5 w-5 text-[#64748B]" />
+              <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            </Link>
+          )}
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {children}
         </main>
       </div>

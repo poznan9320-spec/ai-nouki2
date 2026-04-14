@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { authHeaders } from '@/lib/auth-context'
 import { apiFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Send, Bot, Package } from 'lucide-react'
+import { Send, Bot, Package, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface DeliveryRef {
@@ -66,13 +66,22 @@ export default function ChatPage() {
     <div className="flex flex-col h-[calc(100vh-8rem)] -mx-6 -mt-6">
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3 bg-[#102A43] text-white shrink-0">
-        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
           <Bot className="h-4 w-4 text-white" />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold leading-none">AIアシスタント</p>
           <p className="text-xs text-white/60 mt-0.5">入荷データについて質問できます</p>
         </div>
+        {messages.length > 0 && (
+          <button
+            onClick={() => setMessages([])}
+            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/60 hover:text-white"
+            title="会話をリセット"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Messages */}

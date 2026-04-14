@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react'
 import { useAuth, authHeaders } from '@/lib/auth-context'
 import { apiFetch } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Package, Truck, Download, CalendarClock } from 'lucide-react'
+import { Package, Truck, Download, CalendarClock, Upload } from 'lucide-react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 
 interface Delivery {
@@ -88,6 +89,8 @@ export default function DashboardPage() {
     )
   }
 
+  const hasAnyData = deliveries.length > 0
+
   return (
     <div className="space-y-5">
       <div>
@@ -98,6 +101,26 @@ export default function DashboardPage() {
           {today.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
         </p>
       </div>
+
+      {!hasAnyData && (
+        <Card className="border-dashed border-2 border-gray-200 bg-gray-50/50">
+          <CardContent className="flex flex-col items-center justify-center py-10 text-center gap-3">
+            <div className="w-14 h-14 bg-[#102A43]/5 rounded-full flex items-center justify-center">
+              <Package className="h-7 w-7 text-[#102A43]/30" />
+            </div>
+            <div>
+              <p className="font-semibold text-[#102A43]">まだ納期データがありません</p>
+              <p className="text-sm text-[#64748B] mt-1">CSVや画像から納期データを取り込んでください</p>
+            </div>
+            <Link href="/ingest">
+              <button className="inline-flex items-center gap-2 px-4 py-2 bg-[#102A43] text-white text-sm font-medium rounded-lg hover:bg-[#1a3a5c] transition-colors">
+                <Upload className="h-4 w-4" />
+                データを取り込む
+              </button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 明日納品商品 */}
       <Card className={tomorrowDeliveries.length > 0 ? 'border-blue-200 bg-blue-50/40' : ''}>

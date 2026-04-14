@@ -228,7 +228,13 @@ export default function IngestPage() {
                   type="file"
                   accept=".csv,.txt"
                   onChange={e => {
-                    setCsvFile(e.target.files?.[0] ?? null)
+                    const f = e.target.files?.[0] ?? null
+                    if (f && f.size > 10 * 1024 * 1024) {
+                      toast.error('ファイルサイズは10MB以下にしてください')
+                      e.target.value = ''
+                      return
+                    }
+                    setCsvFile(f)
                     setCsvResult(null)
                     setCsvError(null)
                   }}
@@ -367,7 +373,15 @@ export default function IngestPage() {
                     </div>
                   )}
                   <input ref={fileInputRef} type="file" accept="image/*,.pdf,application/pdf" className="hidden"
-                    onChange={e => setOcrFile(e.target.files?.[0] ?? null)} />
+                    onChange={e => {
+                      const f = e.target.files?.[0] ?? null
+                      if (f && f.size > 20 * 1024 * 1024) {
+                        toast.error('ファイルサイズは20MB以下にしてください')
+                        e.target.value = ''
+                        return
+                      }
+                      setOcrFile(f)
+                    }} />
                 </div>
               </div>
 

@@ -150,6 +150,7 @@ export default function CalendarPage() {
         : '#64748B')
 
   const openEdit = (item: CalendarItem) => {
+    setEditingSupplier(null)
     setEditItem(item)
     setEditForm({
       productName: item.product_name,
@@ -623,7 +624,11 @@ export default function CalendarPage() {
               <Button variant="outline" onClick={() => setEditItem(null)} disabled={saving}>
                 キャンセル
               </Button>
-              <Button onClick={saveEdit} disabled={saving} className="flex items-center gap-1">
+              <Button
+                onClick={saveEdit}
+                disabled={saving || !editForm.productName.trim() || !editForm.deliveryDate}
+                className="flex items-center gap-1"
+              >
                 <Check className="h-3.5 w-3.5" />
                 {saving ? '保存中...' : '保存'}
               </Button>

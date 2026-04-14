@@ -18,6 +18,19 @@ interface Notification {
   created_at: string
 }
 
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'たった今'
+  if (mins < 60) return `${mins}分前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}時間前`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return '昨日'
+  if (days < 7) return `${days}日前`
+  return new Date(iso).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
+}
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
@@ -156,10 +169,8 @@ export default function NotificationsPage() {
                         {!notif.is_read && (
                           <Badge className="bg-[#102A43] text-white text-[10px] h-4">新着</Badge>
                         )}
-                        <time className="text-xs text-[#64748B]">
-                          {new Date(notif.created_at).toLocaleDateString('ja-JP', {
-                            month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                          })}
+                        <time className="text-xs text-[#64748B]" title={new Date(notif.created_at).toLocaleString('ja-JP')}>
+                          {relativeTime(notif.created_at)}
                         </time>
                       </div>
                     </div>
