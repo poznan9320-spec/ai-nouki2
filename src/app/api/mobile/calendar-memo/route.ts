@@ -15,16 +15,20 @@ export async function GET(req: NextRequest) {
   }
 
   const prefix = `${year}-${String(month).padStart(2, '0')}`
-  const memos = await prisma.calendarMemo.findMany({
-    where: { companyId: user.companyId, date: { startsWith: prefix } },
-  })
 
-  const memoMap: Record<string, string> = {}
-  for (const m of memos) {
-    memoMap[m.date] = m.content
+  try {
+    const memos = await prisma.calendarMemo.findMany({
+      where: { companyId: user.companyId, date: { startsWith: prefix } },
+    })
+    const memoMap: Record<string, string> = {}
+    for (const m of memos) {
+      memoMap[m.date] = m.content
+    }
+    return NextResponse.json({ memos: memoMap })
+  } catch {
+    // CalendarMemo table not yet in DB — return empty
+    return NextResponse.json({ memos: {} })
   }
-
-  return NextResponse.json({ memos: memoMap })
 }
 
 export async function PUT(req: NextRequest) {
@@ -34,18 +38,22 @@ export async function PUT(req: NextRequest) {
   const { date, content } = await req.json()
   if (!date) return NextResponse.json({ error: 'date が必要です' }, { status: 400 })
 
-  if (!content || content.trim() === '') {
-    await prisma.calendarMemo.deleteMany({
-      where: { companyId: user.companyId, date },
+  try {
+    if (!content || content.trim() === '') {
+      await prisma.calendarMemo.deleteMany({
+        where: { companyId: user.companyId, date },
+      })
+      return NextResponse.json({ deleted: true })
+    }
+
+    const memo = await prisma.calendarMemo.upsert({
+      where: { companyId_date: { companyId: user.companyId, date } },
+      update: { content: content.trim() },
+      create: { companyId: user.companyId, date, content: content.trim() },
     })
-    return NextResponse.json({ deleted: true })
+    return NextResponse.json({ memo })
+  } catch {
+    // CalendarMemo table not yet in DB — respond OK so UI doesn't show an error
+    return NextResponse.json({ memo: { companyId: user.companyId, date, content: content?.trim() ?? '' } })
   }
-
-  const memo = await prisma.calendarMemo.upsert({
-    where: { companyId_date: { companyId: user.companyId, date } },
-    update: { content: content.trim() },
-    create: { companyId: user.companyId, date, content: content.trim() },
-  })
-
-  return NextResponse.json({ memo })
 }

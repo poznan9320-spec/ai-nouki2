@@ -9,17 +9,26 @@ export async function GET(req: NextRequest) {
   const user = getTokenFromRequest(req)
   if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
 
-  const token = await prisma.gmailToken.findUnique({
-    where: { companyId: user.companyId },
-    select: { email: true, updatedAt: true, faxSenderEmail: true },
-  })
-
-  return NextResponse.json({
-    connected: !!token,
-    email: token?.email ?? null,
-    faxSenderEmail: token?.faxSenderEmail ?? 'FromBrotherDevice@brother.com',
-    connectedAt: token?.updatedAt ?? null,
-  })
+  try {
+    const token = await prisma.gmailToken.findUnique({
+      where: { companyId: user.companyId },
+      select: { email: true, updatedAt: true, faxSenderEmail: true },
+    })
+    return NextResponse.json({
+      connected: !!token,
+      email: token?.email ?? null,
+      faxSenderEmail: token?.faxSenderEmail ?? 'FromBrotherDevice@brother.com',
+      connectedAt: token?.updatedAt ?? null,
+    })
+  } catch {
+    // GmailToken table not yet in DB
+    return NextResponse.json({
+      connected: false,
+      email: null,
+      faxSenderEmail: 'FromBrotherDevice@brother.com',
+      connectedAt: null,
+    })
+  }
 }
 
 export async function PATCH(req: NextRequest) {
