@@ -12,15 +12,25 @@ export async function GET(req: NextRequest) {
   const start = new Date(year, month - 1, 1)
   const end = new Date(year, month, 0, 23, 59, 59)
 
-  const [deliveries, suppliers] = await Promise.all([
-    prisma.delivery.findMany({
+  let deliveries: Awaited<ReturnType<typeof prisma.delivery.findMany>> = []
+  let suppliers: Awaited<ReturnType<typeof prisma.supplier.findMany>> = []
+  try {
+    deliveries = await prisma.delivery.findMany({
       where: { companyId: user.companyId, deliveryDate: { gte: start, lte: end } },
       orderBy: { deliveryDate: 'asc' },
-    }),
-    prisma.supplier.findMany({
+    })
+  } catch (e) {
+    console.error('[calendar] delivery query failed:', e)
+    return NextResponse.json({ error: `delivery error: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
+  try {
+    suppliers = await prisma.supplier.findMany({
       where: { companyId: user.companyId },
-    }),
-  ])
+    })
+  } catch (e) {
+    console.error('[calendar] supplier query failed:', e)
+    return NextResponse.json({ error: `supplier error: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+  }
 
   // Build supplier color map by name
   const supplierColorMap: Record<string, string> = {}
