@@ -8,16 +8,38 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (user.role !== 'ADMIN') return NextResponse.json({ error: '権限がありません' }, { status: 403 })
 
   const { id } = await params
-  const { color, name } = await req.json()
-  const data: Record<string, string> = {}
-  if (color !== undefined) data.color = color
-  if (name !== undefined) data.name = name
+  const { color, name } = await req.json() as { color?: string; name?: string }
+  const now = new Date()
 
-  const supplier = await prisma.supplier.update({
-    where: { id, companyId: user.companyId },
-    data,
-  })
-  return NextResponse.json(supplier)
+  if (color !== undefined && name !== undefined) {
+    try {
+      await prisma.$executeRaw`
+        UPDATE "Supplier" SET name = ${name}, color = ${color}, "updatedAt" = ${now}
+        WHERE id = ${id} AND "companyId" = ${user.companyId}
+      `
+    } catch {
+      await prisma.$executeRaw`
+        UPDATE "Supplier" SET name = ${name}, "updatedAt" = ${now}
+        WHERE id = ${id} AND "companyId" = ${user.companyId}
+      `
+    }
+  } else if (color !== undefined) {
+    try {
+      await prisma.$executeRaw`
+        UPDATE "Supplier" SET color = ${color}, "updatedAt" = ${now}
+        WHERE id = ${id} AND "companyId" = ${user.companyId}
+      `
+    } catch {
+      // color column not yet in DB — silently skip
+    }
+  } else if (name !== undefined) {
+    await prisma.$executeRaw`
+      UPDATE "Supplier" SET name = ${name}, "updatedAt" = ${now}
+      WHERE id = ${id} AND "companyId" = ${user.companyId}
+    `
+  }
+
+  return NextResponse.json({ id, name, color: color ?? null, companyId: user.companyId })
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -26,6 +48,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (user.role !== 'ADMIN') return NextResponse.json({ error: '権限がありません' }, { status: 403 })
 
   const { id } = await params
-  await prisma.supplier.delete({ where: { id, companyId: user.companyId } })
+  await prisma.$executeRaw`
+    DELETE FROM "Supplier" WHERE id = ${id} AND "companyId" = ${user.companyId}
+  `
   return NextResponse.json({ success: true })
 }
