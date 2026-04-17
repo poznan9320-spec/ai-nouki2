@@ -24,24 +24,26 @@ function buildSystemPrompt(): string {
 「来月」= ${nextMonthYear}年${nextMonth}月、「今月」= ${year}年${month}月 として計算してください。
 年が明示されていない日付は、基準日以降で最も近い日付として解釈してください。
 
-【ステップ1: 全テキストを読み取る】
-まず文書内の全ての文字・数字・手書きメモを読み取ってください。
+【ステップ1: 全体把握と推論（Chain of Thought）】
+まず画像やテキスト内のすべての文字（商品名、数量、日付、手書きメモなど）を丁寧に読み取り、以下の【納品日の判断基準】に従って各商品の納期を推論してください。FAX特有の不鮮明な文字や手書き文字も文脈から推測して読み取ってください。推論過程はテキストとして出力してください。
 
-【ステップ2: 納品日の判断（優先順位）】
+【納品日の判断基準（優先順位）】
 以下の順で納品日を特定してください：
 1. 手書きメモ「〇/〇〇に納品します」「〇日納品」など → 最優先
 2. 「納品指定日」「納品日」「納期」「回答納期」「出荷日」などのラベルの横・下の日付
 3. 「即納」「即日」→ 今日の日付（${todayStr}）
 4. 上記が全てない場合 → 今日+14日
 
-【ステップ3: 納品日として使ってはいけない日付】
+【納品日として使ってはいけない日付】
 - FAXヘッダーの送信日時（例: 26-03-25;18:10）
 - 発注書・注文書の作成日・発注日（ページ上部の「〇年〇月〇日」）
 - 電話番号・FAX番号の数字
 
-【ステップ4: JSON出力】
-推論の後、必ず以下のJSON形式で終わること：
+【ステップ2: JSON出力】
+推論が終わったら、必ず以下のJSON形式を含めてください。JSONブロックのみをシステムがパースします。
+\`\`\`json
 {"items":[{"productName":"商品名","quantity":1,"deliveryDate":"YYYY-MM-DD","notes":"備考"}]}
+\`\`\`
 
 - 商品名不明 → 「不明商品」
 - 数量不明 → 1
@@ -76,9 +78,12 @@ export async function POST(req: NextRequest) {
     type ExtractedData = { items: ExtractedItem[] }
 
     function parseJson(raw: string): ExtractedData {
-      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
-      const match = cleaned.match(/\{[\s\S]*\}/)
-      if (!match) throw new Error(`JSONが見つかりません。モデルの返答: ${cleaned.slice(0, 200)}`)
+      const codeBlockMatch = raw.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i)
+      if (codeBlockMatch) {
+        return JSON.parse(codeBlockMatch[1]) as ExtractedData
+      }
+      const match = raw.match(/\{[\s\S]*\}/)
+      if (!match) throw new Error(`JSONが見つかりません。モデルの返答: ${raw.slice(0, 200)}`)
       return JSON.parse(match[0]) as ExtractedData
     }
 
@@ -101,8 +106,8 @@ export async function POST(req: NextRequest) {
         : { type: 'image', source: { type: 'base64', media_type: (file.type || 'image/jpeg') as ImageMediaType, data: base64 } }
 
       const response = await client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 4096,
         system: systemPrompt,
         messages: [{
           role: 'user',
@@ -118,8 +123,8 @@ export async function POST(req: NextRequest) {
       extractedData = parseJson(content.text)
     } else {
       const response = await client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2048,
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 4096,
         system: systemPrompt,
         messages: [{ role: 'user', content: text! }],
       })

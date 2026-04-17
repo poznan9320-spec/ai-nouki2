@@ -37,7 +37,10 @@ function buildOCRSystemPrompt(): string {
 「来月」= ${nextMonthYear}年${nextMonth}月、「今月」= ${year}年${month}月として計算してください。
 年が明示されていない日付は、基準日以降で最も近い日付として解釈してください。
 
-【納品日の判断（優先順位）】
+【ステップ1: 全体把握と推論（Chain of Thought）】
+まずは画像内のすべてのテキスト（商品名、数量、日付、手書きメモなど）を丁寧に読み取り、以下の【納品日の判断基準】に従って各商品の納期を推論してください。FAX特有の不鮮明な文字や手書き文字も文脈から推測して読み取ってください。推論過程はテキストとして出力してください。
+
+【納品日の判断基準（優先順位）】
 1. 手書きメモ「〇/〇〇に納品します」「〇日納品」など → 最優先
 2. 「納品指定日」「納品日」「納期」「回答納期」「出荷日」などのラベル横・下の日付
 3. 「即納」「即日」→ 今日の日付（${todayStr}）
@@ -48,16 +51,22 @@ function buildOCRSystemPrompt(): string {
 - 発注書・注文書の作成日・発注日（ページ上部の「〇年〇月〇日」）
 - 電話番号・FAX番号の数字
 
-【出力形式】必ず以下のJSONで終わること：
+【ステップ2: JSON出力】
+推論が終わったら、必ず以下のJSON形式を含めてください。JSONブロックのみをシステムがパースします。
+\`\`\`json
 {"items":[{"productName":"商品名","quantity":1,"deliveryDate":"YYYY-MM-DD","notes":"備考","supplierName":"取引先名"}]}
+\`\`\`
 
 - 商品名不明 → 「不明商品」、数量不明 → 1、取引先不明 → 空文字
 - 複数商品は全てitemsに含める`
 }
 
 function parseJson(raw: string): { items: Array<{ productName: string; quantity: number; deliveryDate: string; notes?: string; supplierName?: string }> } {
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
-  const match = cleaned.match(/\{[\s\S]*\}/)
+  const codeBlockMatch = raw.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i)
+  if (codeBlockMatch) {
+    return JSON.parse(codeBlockMatch[1])
+  }
+  const match = raw.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('JSONが見つかりません')
   return JSON.parse(match[0])
 }
@@ -146,8 +155,8 @@ async function processCompany(
         const base64 = base64Data.replace(/-/g, '+').replace(/_/g, '/')
 
         const ocrResponse = await anthropic.messages.create({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1024,
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 4096,
           system: buildOCRSystemPrompt(),
           messages: [{
             role: 'user',
