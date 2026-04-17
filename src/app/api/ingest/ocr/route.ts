@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
         : { type: 'image', source: { type: 'base64', media_type: (file.type || 'image/jpeg') as ImageMediaType, data: base64 } }
 
       const response = await client.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 4096,
         system: systemPrompt,
         messages: [{
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
       extractedData = parseJson(content.text)
     } else {
       const response = await client.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 4096,
         system: systemPrompt,
         messages: [{ role: 'user', content: text! }],

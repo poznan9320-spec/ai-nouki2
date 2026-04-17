@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       : `あなたは納期管理アシスタントです。今日以降の入荷予定データ（${contextData.length}件）を以下に示します。ユーザーの質問に答えてください。商品名で質問すると該当商品の納期をお答えできます。\n\n入荷予定データ:\n${lines || 'データなし'}`
 
     const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-3-haiku-20240307',
       max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: 'user', content: message }],

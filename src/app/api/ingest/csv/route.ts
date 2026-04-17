@@ -109,7 +109,7 @@ async function detectMapping(headers: string[], sampleRows: Record<string, strin
       .map(r => headers.map(h => `${h}: ${r[h] ?? ''}`).join(' | ')).join('\n')
 
     const res = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-3-haiku-20240307',
       max_tokens: 200,
       messages: [{
         role: 'user',

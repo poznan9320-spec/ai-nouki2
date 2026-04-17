@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
-import { Building2, Users, Shield, Copy, Trash2, Plus, Truck, QrCode, Check, X, Bell, Printer, Mail, Unlink, ExternalLink, Pencil } from 'lucide-react'
+import { Building2, Users, Shield, Copy, Trash2, Plus, Truck, QrCode, Check, X, Bell, Printer, Mail, Unlink, ExternalLink, Pencil, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import QRCode from 'react-qr-code'
 
@@ -67,6 +67,28 @@ export default function SettingsPage() {
   const [editingFaxSender, setEditingFaxSender] = useState(false)
   const [faxSenderInput, setFaxSenderInput] = useState('')
   const [savingFaxSender, setSavingFaxSender] = useState(false)
+  const [isSyncingFax, setIsSyncingFax] = useState(false)
+
+  const handleSyncFax = async () => {
+    setIsSyncingFax(true)
+    try {
+      const res = await apiFetch<{ processed: number; skipped: number; errors: number }>('/api/admin/fax-sync', {
+        method: 'POST',
+        headers: authHeaders(),
+      })
+      if (res.processed > 0) {
+        toast.success(`${res.processed}件の新しいFAXを登録しました！`)
+      } else if (res.errors > 0) {
+        toast.warning(`処理完了（エラー: ${res.errors}件）新着FAXはありませんでした`)
+      } else {
+        toast.success(`新着の未読FAXはありませんでした`)
+      }
+    } catch {
+      toast.error('同期に失敗しました')
+    } finally {
+      setIsSyncingFax(false)
+    }
+  }
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -583,16 +605,27 @@ export default function SettingsPage() {
                   <p className="text-[10px] text-[#64748B]">複合機から転送されるメールの送信元アドレスを入力してください</p>
                 </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-red-600 border-red-300 hover:bg-red-50 w-full"
-                  onClick={handleGmailDisconnect}
-                  disabled={disconnecting}
-                >
-                  <Unlink className="h-3.5 w-3.5 mr-1.5" />
-                  {disconnecting ? '解除中...' : 'Gmail接続を解除する'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1 bg-[#102A43] hover:bg-[#1a3a5c]"
+                    size="sm"
+                    onClick={handleSyncFax}
+                    disabled={isSyncingFax}
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isSyncingFax ? 'animate-spin' : ''}`} />
+                    {isSyncingFax ? '同期中...' : '即時FAXを取得する'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 border-red-300 hover:bg-red-50 flex-1"
+                    onClick={handleGmailDisconnect}
+                    disabled={disconnecting}
+                  >
+                    <Unlink className="h-3.5 w-3.5 mr-1.5" />
+                    {disconnecting ? '解除中...' : 'Gmail接続を解除する'}
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
